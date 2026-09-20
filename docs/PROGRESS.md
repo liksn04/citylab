@@ -1,5 +1,59 @@
 # Progress Log
 
+## 2026-09-20 — M2.3/M2.4 MaxPressure controller + engine rewired to Controller path
+
+### Session objective
+M2.3: MaxPressureController를 구현하고 TrafficEngine을 Controller 경로로 재배선한다. Fixed golden baseline은 byte-identical로 보존한다(drift 시 재배선 revert).
+
+### Pre-code contract check (Phase C)
+- 아키텍처 변경(engine 신호 구동을 Controller+applySignalIntent로 전환) — 이미 D-008에 근거. pressure 결정 신호는 D-009.
+- 보고 metric/`metricVersion`/RunSummary 형태 변경 없음(golden fixture 형태 보존).
+
+### Completed
+- `src/controllers/MaxPressureController.ts`: `Controller` 구현. decide()는 반대 axis pressure가 현재보다 **strictly 클 때만** SWITCH(동률/열세 HOLD, 결정론적 HOLD-first tie-break). 색 미지정, min-green/yellow는 환경(`applySignalIntent`)이 강제.
+- `src/controllers/Controller.ts`: 관측을 base `IntersectionObservation` + `ObservationInput`(base + `pressure: AxisPressure`)로 분리. `observe(input: ObservationInput)`.
+- `src/simulation/constants.ts`: `YELLOW_SEC=3`, `MIN_GREEN_SEC=5`, `FIXED_GREEN_SEC=20` 단일 출처화. FixedTimeController DEFAULT가 상수 참조.
+- `src/simulation/TrafficEngine.ts`: tick 1단계를 controller 구동으로 재배선 — `queueLengthsByEdge`(start-of-tick) → `computePressure` → `buildObservationInput`+pressure → `controller.decide` → `applySignalIntent`(switch 카운트). `controllerKind?: 'fixed'|'maxpressure'`(default fixed). Fixed는 env min-green=0으로 자기 timer가 유일한 스위치 결정 → legacy와 동등.
+- `src/simulation/scenarios.ts`: `BALANCED_4X4_V1`를 비-테스트 모듈로 추출(goldenRun.test import 부작용 제거). goldenRun/maxPressureRun 둘 다 여기서 import.
+- 테스트: MaxPressure decide/min-green gating; engine-level MaxPressure run(결정성, 유한성, conservation, drain no-leak, Fixed와 상이함=adaptive).
+
+### Golden baseline guard (핵심)
+- `goldenRun.test.ts`(saved fixture equality 포함) **PASS** — 재배선 후에도 Fixed 결과 byte-identical. Fixed<->legacy 동등성(M2.1) + golden fixture 동등성으로 이중 확인.
+
+### 실제 run 결과 (balanced-4x4-v1, seed 41021, 1800s) — 있는 그대로 기록 (R2, 우월 가정 안 함)
+| controller | avgWait | p95 | maxQueue | throughput | switches | completed/generated |
+|---|---:|---:|---:|---:|---:|---:|
+| fixed-v1 | 12.45s | 37.5s | 5 | 585 | 1248 | 585/599 |
+| maxpressure-v1 | 3.15s | 11.0s | 3 | 593 | 514 | 593/599 |
+이 scenario에서는 MaxPressure가 모든 지표에서 개선(대기·p95·큐↓, throughput↑, 스위치↓). 다른 scenario(rush)에서 반드시 우월하다는 보장은 아니며 M2.5/M2.6에서 그대로 기록한다.
+
+### UI 스모크
+- vite preview 렌더 확인: 4×4 city / fixed baseline 정상, console error 없음, 차량/신호/metric 표시 정상(엔진 재배선이 Fixed 렌더를 바꾸지 않음).
+
+### M2 Exit Criteria 진전
+- [x] controller interface가 Fixed/MaxPressure 양쪽 지원 — 둘 다 engine에서 구동.
+- [x] decision interval/min-green 계약 테스트 — applySignalIntent + MaxPressure min-green gating.
+- [x] MaxPressure deterministic — 동일 seed 반복 summary 동일.
+- [x] MaxPressure가 항상 우월하다고 가정하지 않고 결과 기록 — 위 표 + no-superiority 테스트.
+- [ ] balanced/rush 두 scenario에서 결과 저장 — balanced는 확인, **rush scenario 정의/저장은 M2.5/M2.6 남음**.
+
+### Tests actually run
+- `npm run check` → PASS (18 files, 118 tests; tokens ✓, session ✓, build ✓)
+- vite preview → console error 0, 렌더 정상
+
+### Known issue
+- `docs/MILESTONES.md` drift(M1 ACTIVE/M2 LOCKED) 및 UI 상단 "M1 active" 카피 stale. source of truth는 `project-status.json`. 범위 밖이라 미수정.
+
+### Next exact actions
+1. M2.5/M2.6: `src/simulation/scenarios.ts`에 rush scenario(예: 비대칭 demand/higher vehiclesPerHour) 추가. Fixed vs MaxPressure summary를 balanced/rush 각각 저장(fixture 또는 export)하고 결과를 있는 그대로 기록.
+2. rush에서 MaxPressure가 열세인 경우도 숨기지 않고 기록(R2). 필요 시 p95/starvation 관점 확인.
+3. (선택) M3 준비: RunSummary/provenance에 controllerId·scenarioVersion 포함 여부는 M3에서 결정(지금 summary 형태는 golden 때문에 유지).
+
+### Active milestone
+M2 — Adaptive Baseline: Max Pressure.
+
+---
+
 ## 2026-09-20 — M2.2 Lane pressure computation
 
 ### Session objective

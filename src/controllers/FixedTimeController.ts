@@ -1,5 +1,6 @@
+import { FIXED_GREEN_SEC, YELLOW_SEC } from '../simulation/constants'
 import type { Axis, SignalPhase } from '../simulation/types'
-import type { Controller, IntersectionObservation, SignalIntent, SignalObservationInput } from './Controller'
+import type { Controller, IntersectionObservation, ObservationInput, SignalIntent } from './Controller'
 
 export interface FixedSignalState {
   phase: SignalPhase
@@ -12,7 +13,7 @@ export interface FixedControllerConfig {
   yellowSec: number
 }
 
-const DEFAULT_CONFIG: FixedControllerConfig = { greenSec: 20, yellowSec: 3 }
+const DEFAULT_CONFIG: FixedControllerConfig = { greenSec: FIXED_GREEN_SEC, yellowSec: YELLOW_SEC }
 
 export function stepFixedSignal(state: FixedSignalState, dt: number, config = DEFAULT_CONFIG): FixedSignalState {
   const elapsed = state.phaseElapsedSec + dt
@@ -51,9 +52,15 @@ export class FixedTimeController implements Controller {
     this.id = id
   }
 
-  observe(input: SignalObservationInput): IntersectionObservation {
-    // Fixed time is blind to traffic; it needs nothing beyond the base observation.
-    return input
+  observe(input: ObservationInput): IntersectionObservation {
+    // Fixed time is blind to traffic; it ignores pressure and keeps the base observation.
+    return {
+      id: input.id,
+      phase: input.phase,
+      activeAxis: input.activeAxis,
+      phaseElapsedSec: input.phaseElapsedSec,
+      minGreenSatisfied: input.minGreenSatisfied,
+    }
   }
 
   decide(obs: IntersectionObservation): SignalIntent {

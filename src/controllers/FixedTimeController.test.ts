@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { FixedTimeController, stepFixedSignal } from './FixedTimeController'
-import type { SignalObservationInput } from './Controller'
+import type { ObservationInput } from './Controller'
 
-function obs(partial: Partial<SignalObservationInput>): SignalObservationInput {
+function obs(partial: Partial<ObservationInput>): ObservationInput {
   return {
     id: 'I-0-0',
     phase: 'NS',
     activeAxis: 'NS',
     phaseElapsedSec: 0,
     minGreenSatisfied: true,
+    pressure: { NS: 0, EW: 0 },
     ...partial,
   }
 }
@@ -46,10 +47,17 @@ describe('FixedTimeController (Controller interface, M2.1)', () => {
     expect(c.decide(obs({ phase: 'YELLOW', activeAxis: null, phaseElapsedSec: 100 }))).toBe('HOLD')
   })
 
-  it('is blind to traffic — observe returns the base observation unchanged', () => {
+  it('is blind to traffic — observe drops pressure, keeping the base observation', () => {
     const c = new FixedTimeController({ greenSec: 20 })
-    const input = obs({ phase: 'NS', phaseElapsedSec: 5 })
-    expect(c.observe(input)).toEqual(input)
+    const input = obs({ phase: 'NS', phaseElapsedSec: 5, pressure: { NS: 9, EW: 1 } })
+    expect(c.observe(input)).toEqual({
+      id: input.id,
+      phase: input.phase,
+      activeAxis: input.activeAxis,
+      phaseElapsedSec: input.phaseElapsedSec,
+      minGreenSatisfied: input.minGreenSatisfied,
+    })
+    expect('pressure' in c.observe(input)).toBe(false)
   })
 
   it('is deterministic for a given observation', () => {

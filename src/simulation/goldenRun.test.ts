@@ -1,22 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import baseline from './__fixtures__/fixed-baseline-balanced-4x4-v1.json'
-import { TrafficEngine, type EngineConfig, type RunSummary } from './TrafficEngine'
+import { BALANCED_4X4_V1 } from './scenarios'
+import { TrafficEngine, type RunSummary } from './TrafficEngine'
 
 /**
  * Golden Fixed baseline for M1. See docs/TEST_STRATEGY.md:
  *   scenario: balanced-4x4-v1 · seed 41021 · 1800 s · controller fixed-v1
  * This locks the *meaning* of the metrics; an intentional change must bump the
  * fixture and record a decision (never edit the numbers to make a test pass).
+ * The scenario config lives in ./scenarios so non-test code can reuse it without
+ * importing this test module.
  */
-export const BALANCED_4X4_V1: EngineConfig & { id: string; controllerId: string } = {
-  id: 'balanced-4x4-v1',
-  controllerId: 'fixed-v1',
-  rows: 4,
-  cols: 4,
-  seed: 41021,
-  vehiclesPerHour: 1200,
-  durationSec: 1800,
-}
 
 const GOLDEN_TICKS = 3600 // 1800 s / 0.5 s
 

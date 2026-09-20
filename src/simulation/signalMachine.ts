@@ -1,4 +1,4 @@
-import type { SignalIntent, SignalObservationInput } from '../controllers/Controller'
+import type { IntersectionObservation, SignalIntent } from '../controllers/Controller'
 import type { Axis, IntersectionState } from './types'
 
 export interface EnvSignalConfig {
@@ -19,17 +19,17 @@ function opposite(axis: Axis): Axis {
 }
 
 /**
- * Build the observation input the environment hands a controller for the current
- * tick. `phaseElapsedSec` is the post-advance clock, matching what
+ * Build the base (timing) observation the environment hands a controller for the
+ * current tick. `phaseElapsedSec` is the post-advance clock, matching what
  * {@link applySignalIntent} uses, so a controller decides on the same time the
- * transition applies. This is the seam the engine reuses when it drives a
- * {@link Controller} (M2.3).
+ * transition applies. The engine layers the pressure signal on top to form the
+ * full `ObservationInput` (M2.3).
  */
 export function buildObservationInput(
   state: IntersectionState,
   dtSec: number,
   config: EnvSignalConfig,
-): SignalObservationInput {
+): IntersectionObservation {
   const elapsed = state.phaseElapsedSec + dtSec
   return {
     id: state.id,

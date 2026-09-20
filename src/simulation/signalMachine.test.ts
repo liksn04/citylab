@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ObservationInput } from '../controllers/Controller'
 import { FixedTimeController, stepFixedSignal, type FixedSignalState } from '../controllers/FixedTimeController'
 import { TICK_SEC } from './constants'
 import { applySignalIntent, buildObservationInput, type EnvSignalConfig } from './signalMachine'
@@ -90,7 +91,7 @@ describe('Fixed via Controller reproduces legacy stepFixedSignal (equivalence, D
       modernSeq.push(modern.phase)
       legacySeq.push(legacy.phase)
 
-      const input = buildObservationInput(modern, TICK_SEC, env)
+      const input: ObservationInput = { ...buildObservationInput(modern, TICK_SEC, env), pressure: { NS: 0, EW: 0 } }
       const intent = modern.phase === 'YELLOW' ? 'HOLD' : controller.decide(controller.observe(input))
       modern = applySignalIntent(modern, TICK_SEC, intent, env).state
 

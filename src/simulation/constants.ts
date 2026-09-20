@@ -32,6 +32,19 @@ export const MOVING_EPSILON_M = 0.05
 /** Number of ticks a vehicle occupies an intersection while crossing. */
 export const CROSS_TICKS = 1
 
+/** Fixed yellow duration inserted on every phase switch (seconds). Environment-owned (D-008). */
+export const YELLOW_SEC = 3
+
+/**
+ * Minimum green duration an adaptive controller must serve before the environment
+ * honours a SWITCH intent (seconds). Bounds the switching rate of Max Pressure so
+ * it cannot oscillate every tick (D-008/D-009). Must be a whole multiple of TICK_SEC.
+ */
+export const MIN_GREEN_SEC = 5
+
+/** Green duration of the fixed-time baseline controller (seconds). */
+export const FIXED_GREEN_SEC = 20
+
 /**
  * Metric definition version. Bump this whenever the meaning of any aggregate
  * metric changes so historical runs are not silently reinterpreted (see R7).

@@ -1,20 +1,20 @@
 import type { Axis, SignalPhase } from '../simulation/types'
+import type { AxisPressure } from '../simulation/pressure'
 
 /** A controller's only lever over a signal: keep the current green, or request a switch. */
 export type SignalIntent = 'HOLD' | 'SWITCH'
 
 /**
- * Raw per-intersection state the environment hands a controller at a decision
- * point. The environment computes these; a controller never reads simulation
- * internals directly. `minGreenSatisfied` is environment-owned truth — even a
- * SWITCH intent is ignored until it holds, because safety is enforced by the
- * environment, never trusted to the agent (docs/DATA_CONTRACTS.md Q4, D-008).
+ * Base per-intersection observation every controller's `decide()` receives. The
+ * environment owns `minGreenSatisfied`: even a SWITCH intent is ignored until it
+ * holds, because safety is enforced by the environment, never trusted to the
+ * agent (docs/DATA_CONTRACTS.md Q4, D-008).
  *
  * `phaseElapsedSec` is the time in the current phase *after* the environment has
- * advanced the tick, so a controller's decision uses the same clock the
- * transition machine (`applySignalIntent`) does.
+ * advanced the tick, so a controller decides on the same clock the transition
+ * machine (`applySignalIntent`) uses.
  */
-export interface SignalObservationInput {
+export interface IntersectionObservation {
   id: string
   phase: SignalPhase
   /** The green axis, or null while the phase is YELLOW. */
@@ -23,12 +23,18 @@ export interface SignalObservationInput {
   minGreenSatisfied: boolean
 }
 
-/** Base observation shared by every controller. Specific controllers may extend it. */
-export type IntersectionObservation = SignalObservationInput
+/**
+ * The full per-intersection view the environment offers a controller each
+ * decision tick: base timing plus the lane-pressure signal (D-009). Traffic-blind
+ * controllers (Fixed) simply ignore `pressure`.
+ */
+export interface ObservationInput extends IntersectionObservation {
+  pressure: AxisPressure
+}
 
 /**
- * A signal control policy. Fixed and Max Pressure (and later the shared DQN)
- * all satisfy this one contract, so the environment can drive any of them and
+ * A signal control policy. Fixed and Max Pressure (and later the shared DQN) all
+ * satisfy this one contract, so the environment can drive any of them and
  * experiments can compare them under common random numbers (D-006).
  *
  * The environment consults a controller only for a green phase and applies its
@@ -37,8 +43,8 @@ export type IntersectionObservation = SignalObservationInput
  */
 export interface Controller<Obs extends IntersectionObservation = IntersectionObservation> {
   readonly id: string
-  /** Project raw environment inputs into this controller's observation. */
-  observe(input: SignalObservationInput): Obs
+  /** Project the environment's raw input into this controller's observation. */
+  observe(input: ObservationInput): Obs
   /** Emit an intent from an observation. Must be pure and deterministic. */
   decide(obs: Obs): SignalIntent
 }
