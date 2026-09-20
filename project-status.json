@@ -1,0 +1,45 @@
+{
+  "project": "Neural City Lab",
+  "version": "0.1.0",
+  "activeMilestone": "M1",
+  "activeMilestoneTitle": "Deterministic Traffic Core",
+  "milestoneStatus": {
+    "M0": "done",
+    "M1": "active",
+    "M2": "locked",
+    "M3": "locked",
+    "M4": "locked",
+    "M5": "locked",
+    "M6": "locked"
+  },
+  "gates": {
+    "M0_appShell": true,
+    "M0_designTokens": true,
+    "M0_agentWorkflow": true,
+    "M0_fixedPreview": true,
+    "M1_seedReproducibility": false,
+    "M1_routeCorrectness": false,
+    "M1_queueCorrectness": false,
+    "M1_metricsCorrectness": false,
+    "M1_fixedBaselineStable": false
+  },
+  "lockedUntil": {
+    "maxPressure": "M2",
+    "experimentRunner": "M3",
+    "tensorflowTraining": "M4",
+    "dqn": "M4",
+    "analyticsDashboard": "M5",
+    "sumoIntegration": "post-MVP",
+    "realMap": "post-MVP",
+    "accounts": "post-MVP"
+  },
+  "lastSession": {
+    "date": "2026-09-20",
+    "summary": "Starter package created and governance/token/domain-core checks passed. M0 complete; M1 remains the only active milestone.",
+    "nextActions": [
+      "Add deterministic OD demand generator with explicit seed fixtures.",
+      "Replace preview route helper with tested shortest-path routing contract.",
+      "Define queue membership and waiting-time semantics in tests before tuning visuals."
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "neural-city-lab",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run session:check && npm run tokens:check && npm run test && npm run build",
+    "session:check": "node scripts/check-session.mjs",
+    "session:open": "node scripts/session-open.mjs",
+    "session:close": "node scripts/session-close.mjs",
+    "tokens:check": "node scripts/check-tokens.mjs"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "4.22.0",
+    "dexie": "4.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
+  }
+}
