@@ -1,12 +1,12 @@
 {
   "project": "Neural City Lab",
   "version": "0.1.0",
-  "activeMilestone": "M1",
-  "activeMilestoneTitle": "Deterministic Traffic Core",
+  "activeMilestone": "M2",
+  "activeMilestoneTitle": "Adaptive Baseline: Max Pressure",
   "milestoneStatus": {
     "M0": "done",
-    "M1": "active",
-    "M2": "locked",
+    "M1": "done",
+    "M2": "active",
     "M3": "locked",
     "M4": "locked",
     "M5": "locked",
@@ -17,11 +17,11 @@
     "M0_designTokens": true,
     "M0_agentWorkflow": true,
     "M0_fixedPreview": true,
-    "M1_seedReproducibility": false,
-    "M1_routeCorrectness": false,
-    "M1_queueCorrectness": false,
-    "M1_metricsCorrectness": false,
-    "M1_fixedBaselineStable": false
+    "M1_seedReproducibility": true,
+    "M1_routeCorrectness": true,
+    "M1_queueCorrectness": true,
+    "M1_metricsCorrectness": true,
+    "M1_fixedBaselineStable": true
   },
   "lockedUntil": {
     "maxPressure": "M2",
@@ -35,11 +35,12 @@
   },
   "lastSession": {
     "date": "2026-09-20",
-    "summary": "Starter package created and governance/token/domain-core checks passed. M0 complete; M1 remains the only active milestone.",
+    "summary": "M1 Deterministic Traffic Core completed. Built constants/time, directed road graph, seeded OD demand, deterministic router, vehicle state machine, environment-enforced signal safety, queue/wait/throughput metrics, and the production TrafficEngine; Canvas now renders real engine state. All 8 M1 exit criteria met with tests; 30-minute Fixed golden baseline saved and locked. npm run check passes (83 tests + build). M1 -> done, M2 -> active (MaxPressure remains unimplemented).",
     "nextActions": [
-      "Add deterministic OD demand generator with explicit seed fixtures.",
-      "Replace preview route helper with tested shortest-path routing contract.",
-      "Define queue membership and waiting-time semantics in tests before tuning visuals."
+      "M2.1: introduce a Controller interface (decide()/observe()) that Fixed and MaxPressure both satisfy; keep FixedTimeController behaviour unchanged and its tests passing.",
+      "M2.2: implement lane pressure computation (upstream demand minus downstream capacity) with hand fixtures; do not tune signals yet.",
+      "M2.3/M2.4: MaxPressure decision with deterministic tie-break and environment-enforced min-green + yellow (agent emits HOLD/SWITCH intent only).",
+      "Record any reward/decision-semantics choice in docs/DECISIONS.md before coding it (D-006 common-random-numbers still applies)."
     ]
   }
 }

@@ -1,0 +1,25 @@
+{
+  "scenarioId": "balanced-4x4-v1",
+  "controllerId": "fixed-v1",
+  "seed": 41021,
+  "durationSec": 1800,
+  "ticks": 3600,
+  "metricVersion": "m1-metrics-v1",
+  "note": "Golden Fixed baseline. Regenerate only via an intentional change recorded in docs/DECISIONS.md; never hand-edit numbers to pass a test.",
+  "summary": {
+    "metricVersion": "m1-metrics-v1",
+    "seed": 41021,
+    "ticks": 3600,
+    "simTimeSec": 1800,
+    "generated": 599,
+    "admitted": 599,
+    "completed": 585,
+    "active": 14,
+    "backlog": 0,
+    "avgWaitingTimeSec": 12.446153846153846,
+    "p95WaitingTimeSec": 37.5,
+    "throughput": 585,
+    "maxQueue": 5,
+    "signalSwitches": 1248
+  }
+}
