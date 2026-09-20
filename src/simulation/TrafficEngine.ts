@@ -1,14 +1,20 @@
-import { stepFixedSignal, type FixedControllerConfig } from '../controllers/FixedTimeController'
-import { avgWaitingTimeSec, maxQueueSnapshot, p95WaitingTimeSec } from '../analytics/metrics'
-import { METRIC_VERSION, TICK_SEC, VEHICLE_GAP_M } from './constants'
+import type { Controller, ObservationInput } from '../controllers/Controller'
+import { FixedTimeController, type FixedControllerConfig } from '../controllers/FixedTimeController'
+import { MaxPressureController } from '../controllers/MaxPressureController'
+import { avgWaitingTimeSec, maxQueueSnapshot, p95WaitingTimeSec, queueLengthsByEdge } from '../analytics/metrics'
+import { METRIC_VERSION, MIN_GREEN_SEC, TICK_SEC, VEHICLE_GAP_M, YELLOW_SEC } from './constants'
 import { generateDemand, type Trip } from './demand'
 import { buildGrid } from './grid'
+import { buildApproachIndex, computePressure, type ApproachMovement } from './pressure'
 import { buildRoadGraph } from './roadGraph'
 import { findRoute } from './router'
-import { causedSwitch, signalAllowsEntry } from './signals'
+import { signalAllowsEntry } from './signals'
+import { applySignalIntent, buildObservationInput, type EnvSignalConfig } from './signalMachine'
 import { createFixedStepAccumulator } from './time'
 import type { IntersectionState, RoadGraph } from './types'
 import { createVehicle, currentEdge, stepVehicle, type Vehicle, type VehicleStatus } from './vehicle'
+
+export type ControllerKind = 'fixed' | 'maxpressure'
 
 export interface EngineConfig {
   rows: number
@@ -17,7 +23,10 @@ export interface EngineConfig {
   vehiclesPerHour: number
   /** Length of the demand window (seconds). Vehicles stop spawning after this. */
   durationSec: number
+  /** Fixed-time timing overrides (greenSec/yellowSec). Ignored for adaptive controllers. */
   controller?: FixedControllerConfig
+  /** Which signal controller drives the run. Defaults to the fixed-time baseline. */
+  controllerKind?: ControllerKind
 }
 
 export interface CompletedTrip {
@@ -86,7 +95,9 @@ export interface LiveMetrics {
 export class TrafficEngine {
   readonly graph: RoadGraph
   private readonly config: EngineConfig
-  private readonly controllerConfig?: FixedControllerConfig
+  private readonly controller: Controller
+  private readonly envSignalConfig: EnvSignalConfig
+  private readonly approachIndex: Map<string, ApproachMovement[]>
   private readonly accumulator = createFixedStepAccumulator(TICK_SEC)
   private readonly trips: Trip[]
   private readonly routeCache = new Map<string, ReturnType<typeof findRoute>>()
@@ -106,8 +117,16 @@ export class TrafficEngine {
 
   constructor(config: EngineConfig) {
     this.config = config
-    this.controllerConfig = config.controller
     this.graph = buildRoadGraph(config.rows, config.cols)
+    this.approachIndex = buildApproachIndex(this.graph)
+    if (config.controllerKind === 'maxpressure') {
+      this.controller = new MaxPressureController()
+      this.envSignalConfig = { minGreenSec: MIN_GREEN_SEC, yellowSec: YELLOW_SEC }
+    } else {
+      this.controller = new FixedTimeController({ greenSec: config.controller?.greenSec })
+      // Fixed self-limits via its own green timer; env min-green must not interfere.
+      this.envSignalConfig = { minGreenSec: 0, yellowSec: config.controller?.yellowSec ?? YELLOW_SEC }
+    }
     this.intersections = buildGrid(config.rows, config.cols)
     for (const node of this.intersections) this.intersectionById.set(node.id, node)
     this.trips = generateDemand({
@@ -174,11 +193,19 @@ export class TrafficEngine {
   }
 
   private tick(): void {
-    // 1. Advance signals; count green->yellow switches.
+    // 1. Advance signals through the controller. The controller only emits a
+    //    HOLD/SWITCH intent from an observation (base timing + lane pressure); the
+    //    environment enforces min-green + yellow and counts switches (D-008/D-009).
+    //    Pressure reads start-of-tick queues, before vehicles move this tick.
+    const queueByEdge = queueLengthsByEdge(this.vehicles)
+    const pressureMap = computePressure(this.approachIndex, queueByEdge)
     this.intersections = this.intersections.map((node) => {
-      const next = stepFixedSignal(node, TICK_SEC, this.controllerConfig)
-      if (causedSwitch(node.phase, next.phase)) this.signalSwitches += 1
-      return { ...node, ...next }
+      const base = buildObservationInput(node, TICK_SEC, this.envSignalConfig)
+      const input: ObservationInput = { ...base, pressure: pressureMap.get(node.id) ?? { NS: 0, EW: 0 } }
+      const intent = node.phase === 'YELLOW' ? 'HOLD' : this.controller.decide(this.controller.observe(input))
+      const { state, didSwitch } = applySignalIntent(node, TICK_SEC, intent, this.envSignalConfig)
+      if (didSwitch) this.signalSwitches += 1
+      return state
     })
     this.intersectionById = new Map(this.intersections.map((n) => [n.id, n]))
 

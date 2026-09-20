@@ -111,6 +111,17 @@ simulation window 안에 destination에 도착(ARRIVED)한 vehicle count.
 ### signalSwitches
 yellow transition을 유발한 controller phase-change request count(교차로 합산).
 
+## Control signals — M2
+
+제어 신호는 보고 metric이 아니라 controller 결정에 쓰이는 파생값이다(`metricVersion`과 무관).
+
+### lane pressure (D-009)
+교차로·axis별 pressure = `Σ_{axis approach e} ( queue(e) − queue(straightContinuation(e)) )`.
+`queue`는 Q2 정의(`analytics/metrics.queueLengthsByEdge`)를 재사용하고, `straightContinuation`은 approach와
+같은 heading의 진출 edge(경계면 없음→downstream 0)다. 계산은 `src/simulation/pressure.ts`(그래프 topology +
+per-edge queue map)에서 순수 함수로 하며 vehicle 내부/route와 무관하다. MaxPressure decision(어느 axis를 서빙할지)은
+M2.3에서 이 신호를 사용한다.
+
 ## Provenance — M3
 
 모든 run은 최소 다음을 저장한다.

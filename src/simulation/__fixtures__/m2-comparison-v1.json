@@ -1,0 +1,94 @@
+[
+  {
+    "scenarioId": "balanced-4x4-v1",
+    "seed": 41021,
+    "vehiclesPerHour": 1200,
+    "durationSec": 1800,
+    "runs": [
+      {
+        "controllerKind": "fixed",
+        "summary": {
+          "metricVersion": "m1-metrics-v1",
+          "seed": 41021,
+          "ticks": 3600,
+          "simTimeSec": 1800,
+          "generated": 599,
+          "admitted": 599,
+          "completed": 585,
+          "active": 14,
+          "backlog": 0,
+          "avgWaitingTimeSec": 12.446153846153846,
+          "p95WaitingTimeSec": 37.5,
+          "throughput": 585,
+          "maxQueue": 5,
+          "signalSwitches": 1248
+        }
+      },
+      {
+        "controllerKind": "maxpressure",
+        "summary": {
+          "metricVersion": "m1-metrics-v1",
+          "seed": 41021,
+          "ticks": 3600,
+          "simTimeSec": 1800,
+          "generated": 599,
+          "admitted": 599,
+          "completed": 593,
+          "active": 6,
+          "backlog": 0,
+          "avgWaitingTimeSec": 3.1534569983136596,
+          "p95WaitingTimeSec": 11,
+          "throughput": 593,
+          "maxQueue": 3,
+          "signalSwitches": 514
+        }
+      }
+    ]
+  },
+  {
+    "scenarioId": "rush-4x4-v1",
+    "seed": 73019,
+    "vehiclesPerHour": 2400,
+    "durationSec": 1800,
+    "runs": [
+      {
+        "controllerKind": "fixed",
+        "summary": {
+          "metricVersion": "m1-metrics-v1",
+          "seed": 73019,
+          "ticks": 3600,
+          "simTimeSec": 1800,
+          "generated": 1200,
+          "admitted": 1200,
+          "completed": 1173,
+          "active": 27,
+          "backlog": 0,
+          "avgWaitingTimeSec": 13.887468030690536,
+          "p95WaitingTimeSec": 39.5,
+          "throughput": 1173,
+          "maxQueue": 6,
+          "signalSwitches": 1248
+        }
+      },
+      {
+        "controllerKind": "maxpressure",
+        "summary": {
+          "metricVersion": "m1-metrics-v1",
+          "seed": 73019,
+          "ticks": 3600,
+          "simTimeSec": 1800,
+          "generated": 1200,
+          "admitted": 1200,
+          "completed": 1185,
+          "active": 15,
+          "backlog": 0,
+          "avgWaitingTimeSec": 4.748101265822785,
+          "p95WaitingTimeSec": 15.5,
+          "throughput": 1185,
+          "maxQueue": 4,
+          "signalSwitches": 1037
+        }
+      }
+    ]
+  }
+]
