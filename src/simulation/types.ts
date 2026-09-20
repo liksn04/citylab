@@ -42,24 +42,6 @@ export interface IntersectionState {
   phaseElapsedSec: number
 }
 
-export interface PreviewVehicle {
-  id: string
-  axis: Axis
-  lane: number
-  direction: 1 | -1
-  normalizedPosition: number
-  speed: number
-  waitSec: number
-}
-
-export interface CitySnapshot {
-  rows: number
-  cols: number
-  simTimeSec: number
-  intersections: IntersectionState[]
-  vehicles: PreviewVehicle[]
-}
-
 export interface SimulationMetrics {
   simTimeSec: number
   activeVehicles: number

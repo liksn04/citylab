@@ -1,11 +1,16 @@
 import { useEffect, useRef } from 'react'
-import { PreviewTrafficEngine } from '../simulation/PreviewTrafficEngine'
+import { TrafficEngine } from '../simulation/TrafficEngine'
+import { pickIntersection, renderCity } from '../simulation/renderCity'
 import { useAppStore } from '../store/appStore'
-import { renderCity } from '../simulation/renderCity'
+
+const ROWS = 4
+const COLS = 4
 
 export function CityCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const engineRef = useRef(new PreviewTrafficEngine({ rows: 4, cols: 4, seed: 41021 }))
+  const engineRef = useRef(
+    new TrafficEngine({ rows: ROWS, cols: COLS, seed: 41021, vehiclesPerHour: 1200, durationSec: 3600 }),
+  )
   const running = useAppStore((s) => s.running)
   const speed = useAppStore((s) => s.speed)
   const setMetrics = useAppStore((s) => s.setMetrics)
@@ -59,8 +64,7 @@ export function CityCanvas() {
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
     const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
-    const id = engineRef.current.pickIntersection(point, rect.width, rect.height)
-    setSelectedIntersectionId(id)
+    setSelectedIntersectionId(pickIntersection(point, rect.width, rect.height, ROWS, COLS))
   }
 
   return (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stepFixedSignal } from '../controllers/FixedTimeController'
+import { stepFixedSignal, type FixedSignalState } from '../controllers/FixedTimeController'
 import { TICK_SEC } from './constants'
 import { causedSwitch, isYellow, signalAllowsEntry } from './signals'
 import type { SignalPhase } from './types'
@@ -29,7 +29,7 @@ describe('causedSwitch', () => {
 
 describe('fixed signal safety over a full cycle', () => {
   it('blocks entry during yellow and blocks the cross axis on green', () => {
-    let state = { phase: 'NS' as SignalPhase, targetPhase: 'NS' as const, phaseElapsedSec: 0 }
+    let state: FixedSignalState = { phase: 'NS', targetPhase: 'NS', phaseElapsedSec: 0 }
     let yellowTicks = 0
     let switches = 0
     const observed = new Set<SignalPhase>()
@@ -61,7 +61,7 @@ describe('fixed signal safety over a full cycle', () => {
 
   it('is deterministic across repeated stepping', () => {
     const run = () => {
-      let s = { phase: 'NS' as SignalPhase, targetPhase: 'NS' as const, phaseElapsedSec: 0 }
+      let s: FixedSignalState = { phase: 'NS', targetPhase: 'NS', phaseElapsedSec: 0 }
       const trace: SignalPhase[] = []
       for (let i = 0; i < 100; i += 1) {
         trace.push(s.phase)
