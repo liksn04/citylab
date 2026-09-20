@@ -1,13 +1,13 @@
 {
   "project": "Neural City Lab",
   "version": "0.1.0",
-  "activeMilestone": "M2",
-  "activeMilestoneTitle": "Adaptive Baseline: Max Pressure",
+  "activeMilestone": "M3",
+  "activeMilestoneTitle": "Experiment Runner & Data Provenance",
   "milestoneStatus": {
     "M0": "done",
     "M1": "done",
-    "M2": "active",
-    "M3": "locked",
+    "M2": "done",
+    "M3": "active",
     "M4": "locked",
     "M5": "locked",
     "M6": "locked"
@@ -21,7 +21,13 @@
     "M1_routeCorrectness": true,
     "M1_queueCorrectness": true,
     "M1_metricsCorrectness": true,
-    "M1_fixedBaselineStable": true
+    "M1_fixedBaselineStable": true,
+    "M2_controllerInterface": true,
+    "M2_minGreenContract": true,
+    "M2_maxPressureDeterministic": true,
+    "M2_scenarioResultsSaved": true,
+    "M2_noSuperiorityAssumption": true,
+    "M2_goldenBaselinePreserved": true
   },
   "lockedUntil": {
     "maxPressure": "M2",
@@ -35,12 +41,13 @@
   },
   "lastSession": {
     "date": "2026-09-20",
-    "summary": "M2.3/M2.4 done. Added MaxPressureController (SWITCH only when opposite-axis pressure is strictly greater; deterministic HOLD-first tie-break; env enforces min-green + yellow). Split the observation into a base IntersectionObservation plus ObservationInput (base + AxisPressure). Rewired TrafficEngine to drive a Controller each tick (queueLengthsByEdge -> computePressure -> buildObservationInput + pressure -> decide -> applySignalIntent) with controllerKind 'fixed'|'maxpressure' (default fixed); Fixed uses env min-green 0 so its own timer alone decides switches. Extracted the shared scenario to src/simulation/scenarios.ts. The Fixed golden baseline is byte-identical (goldenRun fixture equality passes). Moved signal timing to constants (YELLOW_SEC/MIN_GREEN_SEC/FIXED_GREEN_SEC). Real balanced-4x4-v1 run (seed 41021, 1800s): Fixed avgWait 12.45s/p95 37.5/maxQ 5/thr 585/switches 1248; MaxPressure avgWait 3.15s/p95 11/maxQ 3/thr 593/switches 514 (recorded as-is, no superiority assumed). npm run check passes (118 tests + build); vite preview renders with no console errors. Remaining: rush scenario + saved comparison (M2.5/M2.6).",
+    "summary": "M2 COMPLETE. M2.5/M2.6: added RUSH_4X4_V1 (2400 vph, seed 73019) and a SCENARIOS list; compareControllers() runs Fixed and MaxPressure on a scenario under identical demand (D-006); saved src/simulation/__fixtures__/m2-comparison-v1.json from real runs and locked it with m2Comparison.test.ts. Measured (recorded as-is, no superiority assumed) — balanced: Fixed avgWait 12.45/p95 37.5/sw 1248 vs MaxPressure 3.15/11/514; rush: Fixed 13.89/39.5/1248 vs MaxPressure 4.75/15.5/1037; MaxPressure improved both here but that is not assumed to generalize. All six M2 exit criteria have evidence and npm run check passes (122 tests + build); the Fixed golden baseline stayed byte-identical throughout the M2.3 engine rewire. Advanced project-status: M2 done, M3 active (M3 not implemented this session).",
     "nextActions": [
-      "M2.5/M2.6: add a rush scenario to src/simulation/scenarios.ts (asymmetric demand or higher vehiclesPerHour), then save Fixed vs MaxPressure summaries for balanced and rush (fixture or export).",
-      "Record the rush comparison exactly as measured, including any case where MaxPressure is worse (R2); check p95/starvation, do not assume MaxPressure wins.",
-      "Optional M3 prep: decide whether RunSummary/provenance should carry controllerId + scenarioVersion (kept out of summary() for now because the golden fixture locks its shape).",
-      "Record any reward/decision-semantics choice in docs/DECISIONS.md before coding it (D-006 common random numbers; D-008 controller contract; D-009 pressure definition in effect)."
+      "M3.1: add a versioned scenario schema (scenarioVersion) on top of src/simulation/scenarios.ts; extend the comparison record with provenance.",
+      "M3.2: canonicalize run config and hash it (same config -> same hash); design a provenance wrapper carrying controllerId + scenarioVersion + configHash + metricVersion (keep summary() shape — the golden fixture locks it).",
+      "M3.3-M3.7: seed-set runner sharing identical demand across controllers, metric sample schema, Dexie/IndexedDB persistence (reload after refresh), CSV + JSON export/import.",
+      "Record M3 provenance/schema decisions in docs/DECISIONS.md before coding them.",
+      "Doc hygiene (out of milestone scope): sync docs/MILESTONES.md status labels and the UI 'M1 active' copy with project-status.json."
     ]
   }
 }

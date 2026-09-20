@@ -1,5 +1,53 @@
 # Progress Log
 
+## 2026-09-20 — M2.5/M2.6 scenario comparison + M2 COMPLETE
+
+### Session objective
+M2.5/M2.6: rush scenario를 추가하고 balanced/rush 두 scenario에서 Fixed vs MaxPressure 결과를 저장한다. 그 후 M2 exit criteria를 평가해 milestone을 전진시킨다.
+
+### Completed
+- `src/simulation/scenarios.ts`: `RUSH_4X4_V1`(2400 vph, seed 73019 — uniform-OD 모델의 heavier-load rush) + `SCENARIOS` 목록. rush는 demand 의미를 바꾸지 않고 기존 rate 노브만 사용(golden 무영향).
+- `src/simulation/compareControllers.ts`: `runScenario`/`compareControllers` — scenario를 controller별로 돌려 summary를 나란히 반환(scenario 내 동일 demand = common random numbers, D-006). 우월 판단 없음.
+- `src/simulation/__fixtures__/m2-comparison-v1.json`: **실제 run에서 생성**한 balanced+rush × fixed+maxpressure summary(하드코딩 아님).
+- `src/simulation/m2Comparison.test.ts`: fixture 재현(결정성), 동일 demand(D-006), 유효성/무-우월가정.
+
+### 저장된 결과 (있는 그대로, R2 — 우월 가정 안 함)
+| scenario | controller | avgWait | p95 | maxQ | thr | switches | comp/gen |
+|---|---|---:|---:|---:|---:|---:|---:|
+| balanced | fixed | 12.45s | 37.5 | 5 | 585 | 1248 | 585/599 |
+| balanced | maxpressure | 3.15s | 11.0 | 3 | 593 | 514 | 593/599 |
+| rush | fixed | 13.89s | 39.5 | 6 | 1173 | 1248 | 1173/1200 |
+| rush | maxpressure | 4.75s | 15.5 | 4 | 1185 | 1037 | 1185/1200 |
+두 scenario 모두에서 MaxPressure가 개선(대기·p95·큐↓, throughput↑, 스위치↓). 이는 이 두 uniform-OD scenario에 대한 측정 결과이며, 다른 demand(비대칭/과포화)에서 항상 우월하다는 보장은 아니다.
+
+### M2 Exit Criteria — evidence (gate)
+- [x] controller interface가 Fixed/MaxPressure 양쪽 지원 — `Controller` + Fixed/MaxPressure 둘 다 engine 구동(`maxPressureRun.test.ts`, `m2Comparison.test.ts`).
+- [x] decision interval/min-green 계약 테스트 — `signalMachine.test.ts` + `MaxPressureController.test.ts`(min-green gating).
+- [x] MaxPressure deterministic — `maxPressureRun.test.ts`(반복 summary 동일) + `m2Comparison.test.ts`(fixture 재현).
+- [x] balanced/rush 두 scenario 결과 저장 — `m2-comparison-v1.json` + 재현 테스트.
+- [x] MaxPressure 우월 가정 안 함 — fixture 있는 그대로, no-superiority 테스트, 위 표.
+- [x] golden Fixed baseline 보존 — `goldenRun.test.ts`(fixture equality) 통과(재배선 후에도 byte-identical).
+
+### Tests actually run
+- `npm run check` → PASS (19 files, 122 tests; tokens ✓, session ✓, build ✓)
+
+### Milestone advancement
+- 위 exit criteria 전부 evidence 존재 + `npm run check` 통과 → `project-status.json` M2 `done`, M3 `active`로 전진(AI_AGENT_GUIDE Milestone advancement protocol). M2 gate들을 `gates`에 기록. **M3 코드는 이번 세션에서 구현하지 않음**(unlock만).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨(M1 ACTIVE/M2 LOCKED)과 UI 상단 "M1 active" 카피가 stale. source of truth는 `project-status.json`. 문서/카피 동기화는 별도 slice 권장(코드 무관).
+
+### Next exact actions (M3 — Experiment Runner & Data Provenance)
+1. M3.1 `src/simulation/scenarios.ts` 기반 versioned scenario schema(scenarioVersion 추가). M2 comparison 구조를 provenance 포함해 확장.
+2. M3.2 run config canonicalization + hash(같은 config → 같은 hash). RunSummary/provenance에 controllerId·scenarioVersion·configHash·metricVersion 포함 설계(현재 summary()는 golden 때문에 형태 고정 → provenance는 별도 래퍼로).
+3. M3.3 seed-set runner(controller들이 동일 demand set 공유), M3.4 metric sample schema, M3.5 IndexedDB(Dexie) persistence, M3.6/3.7 CSV/JSON export.
+4. M3 시작 전 provenance/스키마 결정은 `docs/DECISIONS.md`에 먼저 기록.
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M2 done).
+
+---
+
 ## 2026-09-20 — M2.3/M2.4 MaxPressure controller + engine rewired to Controller path
 
 ### Session objective
