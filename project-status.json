@@ -35,13 +35,13 @@
   },
   "lastSession": {
     "date": "2026-09-20",
-    "summary": "M2.1 done. Added a Controller interface (observe()/decide() emitting HOLD/SWITCH) in src/controllers/Controller.ts, a FixedTimeController class implementing it, and the environment-enforced signal-safety machine src/simulation/signalMachine.ts (applySignalIntent: min-green + yellow; buildObservationInput seam). Recorded D-008. stepFixedSignal and TrafficEngine untouched, so the M1 golden baseline is byte-identical; a Fixed-vs-legacy equivalence test locks the interface to legacy behaviour. npm run check passes (98 tests + build). MaxPressure decision and pressure computation remain unimplemented (M2.2/M2.3).",
+    "summary": "M2.2 done. Added src/simulation/pressure.ts: buildApproachIndex (per-intersection approach edges + same-heading straight continuation, null at boundary), pressureByAxis (axis pressure = sum over approaches of upstream queue minus downstream continuation queue, D-009), computePressure (all intersections). Pure topology + queue arithmetic reusing the M1 Q2 queue definition; no vehicle/analytics deps, no signal tuning. Recorded D-009 and a DATA_CONTRACTS Control-signals note. Hand-fixture tests verify interior/boundary/negative pressure. npm run check passes (107 tests + build). MaxPressure decision and engine rewiring remain (M2.3).",
     "nextActions": [
-      "M2.2: implement lane pressure computation (upstream demand minus downstream capacity) with hand fixtures; extend the observation (approach queue/pressure by axis); do not tune signals yet.",
-      "M2.3/M2.4: implement MaxPressureController.decide with deterministic tie-break, driven through applySignalIntent for environment-enforced min-green + yellow (agent emits HOLD/SWITCH intent only).",
-      "M2.3: rewire TrafficEngine to drive a Controller (Fixed via FixedTimeController) and guard with goldenRun.test.ts fixture equality; if it drifts, revert the engine wiring and keep the interface.",
-      "M2.5/M2.6: save Fixed vs MaxPressure smoke results on balanced and rush scenarios; record outcomes as-is without assuming MaxPressure wins (R2, D-006).",
-      "Record any reward/decision-semantics choice in docs/DECISIONS.md before coding it (D-006 common-random-numbers still applies; D-008 controller contract now in effect)."
+      "M2.3: implement src/controllers/MaxPressureController.ts (implements Controller); observe() builds an observation carrying axis pressure (AxisPressure), decide() emits SWITCH only when the opposite axis pressure is strictly greater than the current axis (HOLD on tie/lower; deterministic HOLD-first tie-break); min-green + yellow enforced by applySignalIntent.",
+      "M2.3: rewire TrafficEngine to drive a Controller each tick (queueLengthsByEdge -> computePressure -> buildObservationInput + pressure -> controller.decide -> applySignalIntent); Fixed via FixedTimeController; guard with goldenRun.test.ts fixture equality (revert wiring if it drifts).",
+      "M2.4: extend the min-green contract test at the engine level (an illegal early switch is ignored).",
+      "M2.5/M2.6: save Fixed vs MaxPressure summaries on balanced and rush scenarios; record outcomes as-is without assuming MaxPressure wins (R2, D-006).",
+      "Record any reward/decision-semantics choice in docs/DECISIONS.md before coding it (D-006 common-random-numbers; D-008 controller contract; D-009 pressure definition now in effect)."
     ]
   }
 }

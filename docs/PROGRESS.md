@@ -1,5 +1,42 @@
 # Progress Log
 
+## 2026-09-20 — M2.2 Lane pressure computation
+
+### Session objective
+M2.2: MaxPressure용 lane pressure(upstream queue − downstream continuation queue)를 순수 함수로 구현하고 hand fixture로 검증한다. 신호 튜닝/결정은 하지 않는다.
+
+### Pre-code contract check (Phase C)
+- pressure는 제어 결정 신호(decision-semantics) → 코딩 전에 `docs/DECISIONS.md`에 **D-009** 기록(핵심 제약 준수). `docs/DATA_CONTRACTS.md`에 "Control signals — M2" 요약 추가.
+- 보고 metric/`metricVersion` 변경 없음.
+
+### Completed
+- `src/simulation/pressure.ts`:
+  - `buildApproachIndex(graph)` — 교차로별 approach edge(e.to==I)와 같은 heading 직진 continuation(경계면 null) 사전계산.
+  - `pressureByAxis(movements, queueByEdge)` — axis별 `Σ(queue(approach) − queue(continuation))`.
+  - `computePressure(index, queueByEdge)` — 전 교차로 pressure map.
+  - queue는 M1 Q2 정의(`queueLengthsByEdge`) 재사용 전제(caller가 vehicle→queueByEdge 변환); 모듈은 vehicle/analytics 의존 없이 순수(레이어 사이클 회피).
+- `src/simulation/pressure.test.ts`: 손계산 fixture(interior I-1-1: NS=5, EW=4), 경계(corner I-0-0: continuation null→upstream만), 음수 pressure, 결정성, 전 16개 교차로 커버.
+
+### M2 Exit Criteria 진전
+- lane pressure 신호 확정·검증(D-009). MaxPressure decision(deterministic tie-break)과 balanced/rush 결과 저장은 M2.3~M2.6.
+
+### Tests actually run
+- `npm run check` → PASS (16 files, 107 tests; 이전 98 + 신규 9; tokens ✓, session ✓, build ✓)
+
+### Known issue
+- `docs/MILESTONES.md` drift(M1 ACTIVE/M2 LOCKED) 여전. source of truth는 `project-status.json`. 범위 밖이라 미수정.
+
+### Next exact actions
+1. M2.3 `src/controllers/MaxPressureController.ts`: `Controller` 구현. observe()가 base 관측 + axis pressure를 담은 관측(예: `MaxPressureObservation extends IntersectionObservation { pressure: AxisPressure }`)을 만들고, decide()는 반대 axis pressure가 현재 axis보다 **strictly 클 때만** SWITCH(동률/열세는 HOLD; deterministic tie-break = HOLD 우선). min-green/yellow는 `applySignalIntent`가 강제.
+2. M2.3 `TrafficEngine`을 `Controller` 경로로 재배선: 매 tick per-intersection에서 `queueLengthsByEdge(vehicles)` → `computePressure` → `buildObservationInput`+pressure → `controller.decide` → `applySignalIntent`. Fixed는 `FixedTimeController`로 구동. `goldenRun.test.ts` fixture 동등성으로 회귀 가드(drift 시 재배선 revert).
+3. M2.4 min-green 계약 테스트 확장(엔진 레벨에서 min-green 위반 switch 무시 확인).
+4. M2.5/M2.6 balanced/rush scenario에서 Fixed vs MaxPressure summary 저장, 우월 여부는 그대로 기록(R2, D-006).
+
+### Active milestone
+M2 — Adaptive Baseline: Max Pressure.
+
+---
+
 ## 2026-09-20 — M2.1 Controller interface + environment signal-safety machine
 
 ### Session objective
