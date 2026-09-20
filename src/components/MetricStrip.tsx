@@ -8,7 +8,7 @@ export function MetricStrip() {
       <StripMetric label="Completed" value={m.completedVehicles.toString()} />
       <StripMetric label="Average wait" value={`${m.avgWaitSec.toFixed(1)} s`} />
       <StripMetric label="Throughput" value={`${m.throughputPerHour.toFixed(0)} veh/h`} />
-      <div className="metric-provenance">seed 41021 · preview-fixed-v0</div>
+      <div className="metric-provenance">seed 41021 · fixed-v1 · m1-metrics-v1</div>
     </footer>
   )
 }
