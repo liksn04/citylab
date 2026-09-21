@@ -1,0 +1,129 @@
+{
+  "format": "neural-city-lab/experiment",
+  "schemaVersion": 1,
+  "exportedAt": "2026-09-21T00:10:00.000Z",
+  "experiment": {
+    "id": "exp-json-1",
+    "name": "JSON export sample",
+    "scenarioId": "balanced-4x4-v1",
+    "scenarioVersion": "v1",
+    "startedAt": "2026-09-21T00:00:00.000Z",
+    "createdAt": "2026-09-21T00:05:00.000Z"
+  },
+  "runs": [
+    {
+      "id": "exp-json-1--fixed-v1--seed41021",
+      "experimentId": "exp-json-1",
+      "scenarioId": "balanced-4x4-v1",
+      "scenarioVersion": "v1",
+      "controllerId": "fixed-v1",
+      "seed": 41021,
+      "simulationDurationSec": 1800,
+      "configHash": "m3-446e5c7517f10ae2",
+      "metricVersion": "m1-metrics-v1",
+      "codeVersion": null,
+      "startedAt": "2026-09-21T00:00:00.000Z",
+      "summary": {
+        "metricVersion": "m1-metrics-v1",
+        "seed": 41021,
+        "ticks": 3600,
+        "simTimeSec": 1800,
+        "generated": 599,
+        "admitted": 599,
+        "completed": 585,
+        "active": 14,
+        "backlog": 0,
+        "avgWaitingTimeSec": 12.446153846153846,
+        "p95WaitingTimeSec": 37.5,
+        "throughput": 585,
+        "maxQueue": 5,
+        "signalSwitches": 1248
+      }
+    },
+    {
+      "id": "exp-json-1--maxpressure-v1--seed41021",
+      "experimentId": "exp-json-1",
+      "scenarioId": "balanced-4x4-v1",
+      "scenarioVersion": "v1",
+      "controllerId": "maxpressure-v1",
+      "seed": 41021,
+      "simulationDurationSec": 1800,
+      "configHash": "m3-7ec1965eecdd28cb",
+      "metricVersion": "m1-metrics-v1",
+      "codeVersion": null,
+      "startedAt": "2026-09-21T00:00:00.000Z",
+      "summary": {
+        "metricVersion": "m1-metrics-v1",
+        "seed": 41021,
+        "ticks": 3600,
+        "simTimeSec": 1800,
+        "generated": 599,
+        "admitted": 599,
+        "completed": 593,
+        "active": 6,
+        "backlog": 0,
+        "avgWaitingTimeSec": 3.1534569983136596,
+        "p95WaitingTimeSec": 11,
+        "throughput": 593,
+        "maxQueue": 3,
+        "signalSwitches": 514
+      }
+    }
+  ],
+  "samples": [
+    {
+      "runId": "exp-json-1--fixed-v1--seed41021",
+      "simTimeSec": 600,
+      "activeVehicles": 13,
+      "completedVehicles": 186,
+      "avgWaitSec": 12.771505376344086,
+      "throughputPerHour": 1116,
+      "maxQueue": 0
+    },
+    {
+      "runId": "exp-json-1--fixed-v1--seed41021",
+      "simTimeSec": 1200,
+      "activeVehicles": 15,
+      "completedVehicles": 384,
+      "avgWaitSec": 12.645833333333334,
+      "throughputPerHour": 1152,
+      "maxQueue": 2
+    },
+    {
+      "runId": "exp-json-1--fixed-v1--seed41021",
+      "simTimeSec": 1800,
+      "activeVehicles": 14,
+      "completedVehicles": 585,
+      "avgWaitSec": 12.446153846153846,
+      "throughputPerHour": 1170,
+      "maxQueue": 1
+    },
+    {
+      "runId": "exp-json-1--maxpressure-v1--seed41021",
+      "simTimeSec": 600,
+      "activeVehicles": 7,
+      "completedVehicles": 192,
+      "avgWaitSec": 3.2057291666666665,
+      "throughputPerHour": 1152,
+      "maxQueue": 1
+    },
+    {
+      "runId": "exp-json-1--maxpressure-v1--seed41021",
+      "simTimeSec": 1200,
+      "activeVehicles": 9,
+      "completedVehicles": 390,
+      "avgWaitSec": 3.123076923076923,
+      "throughputPerHour": 1170,
+      "maxQueue": 0
+    },
+    {
+      "runId": "exp-json-1--maxpressure-v1--seed41021",
+      "simTimeSec": 1800,
+      "activeVehicles": 6,
+      "completedVehicles": 593,
+      "avgWaitSec": 3.1534569983136596,
+      "throughputPerHour": 1186,
+      "maxQueue": 0
+    }
+  ]
+}

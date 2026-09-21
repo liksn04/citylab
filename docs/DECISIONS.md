@@ -247,3 +247,42 @@ M3.6은 `PersistedExperiment`를 스프레드시트에서 바로 읽고 재분�
 
 **Determinism/metric impact:** `metricVersion`·`summary()`·simulation 궤적 **변경 없음**(순수 직렬화). CSV
 열 집합/순서/escaping을 바꾸면 이 항목과 golden CSV fixture(`src/runner/__fixtures__/m3-*-v1.csv`)를 함께 갱신한다.
+
+## D-014 — JSON export/import envelope (M3.7)
+**Status:** accepted (M3)
+
+M3.7은 실험을 **버전 태그가 붙은 JSON 봉투(envelope)**로 내보내고 다시 들여온다
+(`src/runner/experimentJson.ts`). 페이로드는 storage-faithful한 `ExperimentBundle`(experiment record + runs +
+samples)이라 import 후 `RunStore.saveExperiment`로 무손실 복원되고, `recordsToExperiment`로 재분석 뷰를 얻는다.
+
+```ts
+const EXPERIMENT_EXPORT_FORMAT = 'neural-city-lab/experiment'
+const EXPERIMENT_EXPORT_SCHEMA_VERSION = 1
+interface ExperimentExport {
+  format: 'neural-city-lab/experiment'  // 상호운용 판별 태그
+  schemaVersion: number                 // export 스키마 버전(현재 1)
+  exportedAt: string | null             // 선택 메타데이터(주입 가능; 결정성 위해 테스트에서 고정)
+  experiment: ExperimentRecord
+  runs: RunRecord[]
+  samples: MetricSampleRecord[]
+}
+```
+
+- `exportExperimentJson(bundle, meta?)` → 봉투를 pretty JSON 문자열로.
+- `parseExperimentExport(json)` → `JSON.parse` + **검증**(`format` 일치, `schemaVersion` 지원, experiment는
+  object·runs/samples는 array). 실패 시 원인을 담은 명확한 `Error`.
+- `importExperimentBundle(json)` → 검증 후 `ExperimentBundle` 반환(그대로 저장 가능).
+
+**Reason:** CSV(D-013)는 스프레드시트 분석용이지만 실험 전체를 무손실로 이동/재저장하려면 구조를 보존하는
+JSON이 필요하다. `format`/`schemaVersion` 태그는 이후 스키마 진화 시 잘못된/구버전 파일을 import 단계에서
+거부할 수 있게 한다(M3 exit: export 후 재분석 가능한 스키마). 봉투 payload를 `ExperimentBundle`로 둔 이유는
+`experimentToRecords`/`recordsToExperiment`(D-012)와 정합해 저장·재분석 양쪽에 바로 연결되기 때문이다.
+
+**Alternatives considered:**
+- (a) 태그 없는 순수 JSON(bundle 그대로) — 버전/포맷 검증 불가로 향후 스키마 드리프트에 취약. 봉투로 감쌈.
+- (b) payload를 `PersistedExperiment`(분석 뷰)로 — runId/runtime 필드가 빠져 재저장이 비무손실. bundle 채택.
+- (c) import 시 자유 통과(검증 없음) — 손상/구버전 파일을 조용히 수용. format+version+shape 검증 추가.
+
+**Determinism/metric impact:** `metricVersion`·`summary()`·simulation 궤적 **변경 없음**(순수 직렬화/역직렬화).
+`schemaVersion`이나 봉투 필드를 바꾸면 이 항목·`EXPERIMENT_EXPORT_SCHEMA_VERSION`·golden fixture
+(`src/runner/__fixtures__/m3-export-v1.json`)를 함께 갱신하고, 구버전 import 경로(migration/거부)를 정의한다.

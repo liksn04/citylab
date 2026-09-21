@@ -1,5 +1,50 @@
 # Progress Log
 
+## 2026-09-21 — M3.7 JSON export/import + M3 COMPLETE (advanced to M4 active)
+
+### Session objective
+M3.7: 실험을 버전 태그가 붙은 JSON 봉투로 export/import(무손실 roundtrip)한다. 그 후 M3 exit criteria 5개를 재평가해 충족 시 milestone을 전진시킨다.
+
+### Pre-code contract check (Phase C)
+- JSON export 봉투 스키마(format/schemaVersion + 검증)는 재분석/상호운용 스키마 → 코딩 전 `docs/DECISIONS.md`에 **D-014** 기록. 순수 직렬화라 metric/`summary()`/simulation 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-014**: 버전 봉투(`format:'neural-city-lab/experiment'` + `schemaVersion:1` + `exportedAt`)로 `ExperimentBundle` 감쌈. import 시 format/version/shape 검증.
+- `src/runner/experimentJson.ts`: `exportExperimentJson`(pretty JSON), `parseExperimentExport`(JSON/format/version/shape 검증, 명확한 에러), `importExperimentBundle`(→ `ExperimentBundle`, 그대로 저장 가능). `experimentToRecords`/`recordsToExperiment`(D-012)와 정합.
+- `src/runner/__fixtures__/m3-export-v1.json`: **실제 run**에서 생성한 golden(configHash·summary가 m3-provenance/golden과 정합).
+- 테스트: `experimentJson.test.ts`(9) — fixture 재현, 봉투 필드, 무손실 roundtrip, 재분석 뷰 보존, pretty JSON, 검증 에러 4종(bad JSON/format/version/shape).
+
+### M3 Exit Criteria — evidence (gate)
+- [x] Fixed/MaxPressure 동일 seed set 비교 — `runExperiment`(M3.3) + `runExperiment.test.ts`(D-006: seed 내 controller 동일 demand).
+- [x] run마다 config hash 저장 — `RunProvenance.configHash`(`hashRunConfig`, M3.2) → `RunRecord.configHash` persist; `dexieRunStore.test.ts` reload 후 재조회, `experimentPersistence.test.ts` 매핑.
+- [x] metric definition version 저장 — `RunRecord.metricVersion` persist + reload/JSON roundtrip.
+- [x] raw samples와 aggregate 구분 — `MetricSample`(M3.4) vs `RunSummary`; 저장 분리(metricSamples vs runs 테이블) + CSV 두 테이블(M3.6); `sampledRun.test.ts`(summary==unsampled, aggregate maxQueue ≥ sample max).
+- [x] export 후 재분석 가능한 스키마 — CSV(M3.6, tidy 2-table golden) + JSON export/import 무손실 roundtrip(M3.7, 버전 봉투 + 검증).
+
+### Milestone advancement (AI_AGENT_GUIDE protocol)
+- 5개 exit criteria 전부 test/evidence 존재 + `npm run check` 통과 → `project-status.json`: **M3 `done`, M4 `active`**로 전진, M3 gate 5개 기록. 사유/날짜(2026-09-21) 본 항목에 기록.
+- **M4 코드(DQN/TensorFlow.js/replay/worker)는 이번 세션에서 구현하지 않음** — 잠금 해제만. M4 아키텍처 lock 준수 예정: shared network + per-intersection observation(D-002), action HOLD|SWITCH, safety는 환경 강제(`applySignalIntent`).
+
+### Golden/M2 보존 (M3 전 구간)
+- `summary()`/`metricVersion`/simulation 코드 M3 내내 무변경. `npm run check` 내 goldenRun + m2Comparison 계속 통과.
+
+### Tests actually run
+- `npm run check` → PASS (27 files, **182 tests**; 이전 173 + 신규 9; session ✓, tokens ✓, build ✓).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨(M1 ACTIVE/M2 LOCKED/M3 LOCKED)과 UI 상단 "M1 active" 카피가 이제 project-status(M4 active)와 크게 어긋남 — 코드 무관 별도 문서 동기화 slice 권장(source of truth는 `project-status.json`).
+
+### Next exact actions (M4 — Shared DQN Training)
+1. M4 시작 전 아키텍처/관측 인코딩 결정을 `docs/DECISIONS.md`에 기록(Phase C). shared network + per-intersection observation, action HOLD|SWITCH, env-enforced safety 재확인.
+2. M4.1 observation encoder/normalizer(경계/정규화 테스트). 학습 코드 없음.
+3. M4.2 action adapter(기존 `Controller` 계약 재사용, min-green/yellow는 `signalMachine`가 강제).
+4. 이후 M4.3+ replay buffer / target network / epsilon schedule / Web Worker training / model save·load / evaluation(train·eval seed 분리).
+
+### Active milestone
+M4 — Shared DQN Training (M3 done).
+
+---
+
 ## 2026-09-21 — M3.6 CSV export (spreadsheet-readable runs + samples tables)
 
 ### Session objective
