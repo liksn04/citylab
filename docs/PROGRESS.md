@@ -1,5 +1,51 @@
 # Progress Log
 
+## 2026-09-21 — M3.1/M3.2 provenance foundation (versioned scenario schema + config hash)
+
+### Session objective
+M3.1+M3.2: versioned scenario schema(`scenarioVersion`) + 결정론적 run-config canonicalization/hash를 **별도 provenance 래퍼**로 구현한다. `summary()` 형태·`METRIC_VERSION`·golden/m2 fixture는 byte-identical로 보존한다. 코딩 전 결정을 `DECISIONS.md`에 먼저 기록한다(Phase C).
+
+### Pre-code contract check (Phase C)
+- provenance 스키마 + config canonicalization/hash는 아키텍처/데이터 정체성 결정 → 코딩 전에 `docs/DECISIONS.md`에 **D-010** 기록.
+- 보고 metric/`metricVersion`/`summary()` 형태 변경 없음(provenance는 순수 파생 메타데이터, 시뮬레이션 궤적 무영향).
+
+### Completed
+- `docs/DECISIONS.md` **D-010**: `RunConfig` 정규 필드 집합(DATA_CONTRACTS Q5 = 재현 결정 입력), stable key-sorted JSON + 순수 FNV계열 2-lane 해시, `RunProvenance` 래퍼를 `summary()`와 분리, runtime 필드(runId/startedAt/commit)는 persistence 계층(M3.5)로 유예. 대안 4개 + determinism/metric impact 기록.
+- `src/simulation/scenarios.ts`: `Scenario`에 `scenarioVersion: 'v1'` **추가**(기존 `id` 불변). M1.1 M2 산출물에 영향 없음.
+- `src/simulation/runConfig.ts`: `canonicalizeRunConfig`(controller별 유효 timing 해석 — fixed는 greenSec/yellowSec 기본값 채움·minGreen 0, maxpressure는 greenSec null·yellow/minGreen 상수), `stableStringify`(재귀 key 정렬), `hashString`(2-lane 32bit→16hex), `hashRunConfig`(`m3-`+16hex).
+- `src/simulation/provenance.ts`: `RunProvenance` 타입 + `CONTROLLER_IDS`(fixed→fixed-v1, maxpressure→maxpressure-v1) + `buildRunProvenance(scenario, kind)` — sim 실행 없이 순수 파생.
+- `src/simulation/__fixtures__/m3-provenance-v1.json`: **실제 `buildRunProvenance` 출력**에서 생성(하드코딩 아님). balanced/rush × fixed/maxpressure = 4개, 모두 서로 다른 configHash.
+- 테스트: `runConfig.test.ts`(key 순서 무관·기본값 생략 vs 명시 동일 hash·필드별 hash 분리·maxpressure timing 무시), `provenance.test.ts`(fixture 재현·정체성 필드·controllerId 매핑·D-006 동일 seed/상이 hash).
+
+### M3 Exit Criteria 진전 (부분)
+- [~] run마다 config hash — `hashRunConfig`로 결정론적 configHash 산출 가능(저장은 M3.5 persistence에서 결합).
+- [~] metric definition version 저장 — `RunProvenance.metricVersion` 포함(스키마 확정).
+- [ ] Fixed/MaxPressure 동일 seed set 비교 — M3.3(seed-set runner) 남음.
+- [ ] raw samples vs aggregate 구분 — M3.4 + persistence 남음.
+- [ ] export 후 재분석 스키마 — M3.6/3.7 남음.
+
+### Golden/M2 보존 가드 (핵심)
+- `goldenRun.test.ts` + `m2Comparison.test.ts` = 9/9 PASS → Fixed golden baseline과 m2-comparison fixture가 `scenarioVersion` 추가 후에도 byte-identical. `summary()`/`METRIC_VERSION` 미변경.
+
+### Tests actually run
+- `npm run check` → PASS (21 files, **139 tests**; 이전 122 + 신규 17; session ✓ active M3, tokens ✓, build ✓ tsc+vite).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨(M1 ACTIVE/M2 LOCKED/M3 LOCKED)과 UI 상단 "M1 active" 카피가 여전히 stale. source of truth는 `project-status.json`(M3 active). 문서/카피 동기화는 코드 무관 별도 slice.
+- persistence `src/persistence/db.ts`의 `RunRecord`는 이미 configHash/metricVersion/scenarioId 필드를 가짐(M0 skeleton). M3.5에서 `buildRunProvenance` 출력을 이 레코드로 매핑.
+
+### Next exact actions (M3 계속)
+1. M3.3 `src/simulation/` seed-set runner: scenario별 seed set을 공유해 Fixed/MaxPressure를 동일 demand로 배치 실행하고 각 run에 `buildRunProvenance` 부착. `compareControllers`는 M2 fixture 때문에 형태 고정 → 신규 함수로 확장(예: `runExperiment`).
+2. M3.4 metric sample schema: aggregate(`RunSummary`)와 raw per-sample(`MetricSampleRecord`)를 명확히 분리. 엔진에서 주기적 sample 추출 훅 설계(summary 형태 불변 유지).
+3. M3.5 persistence: `src/persistence/`에서 `RunProvenance`+summary+samples를 Dexie로 저장/로드(reload 후 재현). simulation은 Dexie 직접 호출 금지(run coordinator 경유, ARCHITECTURE).
+4. M3.6/M3.7 CSV(스프레드시트 판독) + JSON export/import(roundtrip, metadata 포함).
+5. runtime provenance 필드(runId/startedAt/codeVersion)는 persistence 계층에서 부여(D-010).
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1/M3.2 done, M3.3–M3.7 남음).
+
+---
+
 ## 2026-09-20 — M2.5/M2.6 scenario comparison + M2 COMPLETE
 
 ### Session objective

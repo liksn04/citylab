@@ -1,0 +1,38 @@
+[
+  {
+    "scenarioId": "balanced-4x4-v1",
+    "scenarioVersion": "v1",
+    "controllerId": "fixed-v1",
+    "seed": 41021,
+    "simulationDurationSec": 1800,
+    "configHash": "m3-446e5c7517f10ae2",
+    "metricVersion": "m1-metrics-v1"
+  },
+  {
+    "scenarioId": "balanced-4x4-v1",
+    "scenarioVersion": "v1",
+    "controllerId": "maxpressure-v1",
+    "seed": 41021,
+    "simulationDurationSec": 1800,
+    "configHash": "m3-7ec1965eecdd28cb",
+    "metricVersion": "m1-metrics-v1"
+  },
+  {
+    "scenarioId": "rush-4x4-v1",
+    "scenarioVersion": "v1",
+    "controllerId": "fixed-v1",
+    "seed": 73019,
+    "simulationDurationSec": 1800,
+    "configHash": "m3-2e64746bb4e0ec9f",
+    "metricVersion": "m1-metrics-v1"
+  },
+  {
+    "scenarioId": "rush-4x4-v1",
+    "scenarioVersion": "v1",
+    "controllerId": "maxpressure-v1",
+    "seed": 73019,
+    "simulationDurationSec": 1800,
+    "configHash": "m3-2774794c7cbc8721",
+    "metricVersion": "m1-metrics-v1"
+  }
+]

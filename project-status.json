@@ -40,14 +40,14 @@
     "accounts": "post-MVP"
   },
   "lastSession": {
-    "date": "2026-09-20",
-    "summary": "M2 COMPLETE. M2.5/M2.6: added RUSH_4X4_V1 (2400 vph, seed 73019) and a SCENARIOS list; compareControllers() runs Fixed and MaxPressure on a scenario under identical demand (D-006); saved src/simulation/__fixtures__/m2-comparison-v1.json from real runs and locked it with m2Comparison.test.ts. Measured (recorded as-is, no superiority assumed) — balanced: Fixed avgWait 12.45/p95 37.5/sw 1248 vs MaxPressure 3.15/11/514; rush: Fixed 13.89/39.5/1248 vs MaxPressure 4.75/15.5/1037; MaxPressure improved both here but that is not assumed to generalize. All six M2 exit criteria have evidence and npm run check passes (122 tests + build); the Fixed golden baseline stayed byte-identical throughout the M2.3 engine rewire. Advanced project-status: M2 done, M3 active (M3 not implemented this session).",
+    "date": "2026-09-21",
+    "summary": "M3.1/M3.2 provenance foundation (M3 still active). Recorded D-010 first (Phase C): RunConfig canonical field set = DATA_CONTRACTS Q5 reproducibility inputs, stable key-sorted JSON + pure 2-lane hash, RunProvenance as a SEPARATE wrapper (summary()/METRIC_VERSION/golden+m2 fixtures untouched), runtime fields (runId/startedAt/commit) deferred to persistence (M3.5). Added scenarioVersion:'v1' to scenarios (id unchanged); src/simulation/runConfig.ts (canonicalizeRunConfig + stableStringify + hashRunConfig -> 'm3-'+16hex, same config -> same hash, key-order independent); src/simulation/provenance.ts (RunProvenance + CONTROLLER_IDS + buildRunProvenance); src/simulation/__fixtures__/m3-provenance-v1.json from real derivation (4 distinct hashes). npm run check PASS (21 files, 139 tests = 122+17, build ok). goldenRun + m2Comparison 9/9 PASS => M2 artifacts byte-identical. M3.3-M3.7 not implemented this session.",
     "nextActions": [
-      "M3.1: add a versioned scenario schema (scenarioVersion) on top of src/simulation/scenarios.ts; extend the comparison record with provenance.",
-      "M3.2: canonicalize run config and hash it (same config -> same hash); design a provenance wrapper carrying controllerId + scenarioVersion + configHash + metricVersion (keep summary() shape — the golden fixture locks it).",
-      "M3.3-M3.7: seed-set runner sharing identical demand across controllers, metric sample schema, Dexie/IndexedDB persistence (reload after refresh), CSV + JSON export/import.",
-      "Record M3 provenance/schema decisions in docs/DECISIONS.md before coding them.",
-      "Doc hygiene (out of milestone scope): sync docs/MILESTONES.md status labels and the UI 'M1 active' copy with project-status.json."
+      "M3.3: seed-set runner sharing identical demand across controllers, attaching buildRunProvenance to each run (new fn e.g. runExperiment; do NOT change compareControllers/ScenarioComparison — m2-comparison fixture locks its shape).",
+      "M3.4: metric sample schema separating aggregate RunSummary from raw per-sample records (MetricSampleRecord); design a periodic sample-extraction hook without changing summary() shape.",
+      "M3.5: persistence in src/persistence/ mapping RunProvenance + summary + samples into Dexie (reload after refresh); route through a run coordinator, simulation must not call Dexie (ARCHITECTURE). Assign runtime provenance fields (runId/startedAt/codeVersion) here (D-010).",
+      "M3.6/M3.7: CSV (spreadsheet-readable) + JSON export/import roundtrip with metadata.",
+      "Doc hygiene (out of milestone scope): sync docs/MILESTONES.md status labels (M1 ACTIVE/M2 LOCKED/M3 LOCKED) and the UI 'M1 active' copy with project-status.json (M3 active)."
     ]
   }
 }
