@@ -41,12 +41,13 @@
   },
   "lastSession": {
     "date": "2026-09-21",
-    "summary": "M3.1-M3.4 done (M3 still active). M3.1/M3.2: D-010; scenarioVersion:'v1'; runConfig.ts (canonicalize + stableStringify + hashRunConfig 'm3-'+16hex); provenance.ts (RunProvenance + buildRunProvenance); m3-provenance-v1.json. M3.3: runExperiment.ts seed-set runner (both controllers share demand per seed, D-006; provenance attached). M3.4: D-011 first; raw metric-sample time series separated from aggregate RunSummary — analytics/metricSamples.ts (MetricSample), read-only TrafficEngine.sample() (no tick/summary change), sampledRun.ts (runScenarioSampled, cadence must be TICK_SEC multiple), DEFAULT_SAMPLE_INTERVAL_SEC=30, optional sampling in runExperiment (default omits samples => M3.3 shape). Sample maxQueue is instantaneous; RunSummary.maxQueue >= max(sample.maxQueue). npm run check PASS (23 files, 155 tests = 122+17+7+9, build ok). goldenRun + m2Comparison pass AND runScenarioSampled().summary == runScenario() => aggregates byte-identical. M3.5-M3.7 pending.",
+    "summary": "M3.1-M3.5 done (M3 still active). M3.1/M3.2: D-010; scenarioVersion; runConfig.ts hashRunConfig; provenance.ts buildRunProvenance. M3.3: runExperiment.ts seed-set runner (D-006). M3.4: D-011; raw MetricSample time series vs aggregate RunSummary; read-only TrafficEngine.sample(); sampledRun.ts. M3.5: D-012; persistence — src/persistence/db.ts extended (records carry full provenance + verbatim RunSummary, MetricSampleRecord = full MetricSample, Dexie version(2), RunStore port + DexieRunStore + InMemoryRunStore, getRuns sorted by runId); src/runner/experimentPersistence.ts coordinator (experimentToRecords/recordsToExperiment pure + saveExperiment/loadExperiment) bridges simulation<->persistence, assigns runtime fields (runId/startedAt/codeVersion/createdAt via RuntimeMeta); simulation never imports Dexie. Reload-after-refresh proven with fake-indexeddb@6.2.5 (devDep). npm run check PASS (25 files, 165 tests = 155+10, build ok). goldenRun + m2Comparison pass; summary()/metricVersion/simulation unchanged. M3.6/M3.7 pending.",
     "nextActions": [
-      "M3.5: persistence in src/persistence/ mapping ExperimentResult (provenance + summary + samples) into Dexie (reload after refresh); route through a run coordinator, simulation must not call Dexie (ARCHITECTURE). Map to RunRecord/MetricSampleRecord (db.ts skeleton). Assign runtime provenance fields (runId/startedAt/codeVersion) here (D-010). Check whether tests need fake-indexeddb.",
-      "M3.6: CSV export (spreadsheet-readable): sample time series + summary/provenance header.",
-      "M3.7: JSON export/import roundtrip with metadata; lock the re-analyzable export schema (sample/summary already pass in-memory JSON roundtrip).",
-      "Doc hygiene (out of milestone scope): sync docs/MILESTONES.md status labels (M1 ACTIVE/M2 LOCKED/M3 LOCKED) and the UI 'M1 active' copy with project-status.json (M3 active)."
+      "M3.6: CSV export (spreadsheet-readable) from PersistedExperiment/ExperimentResult: sample time series rows + summary/provenance header. Pure function + fixture test.",
+      "M3.7: JSON export/import roundtrip with metadata; lock the re-analyzable export schema and validate schema/version on import; keep consistent with experimentToRecords/recordsToExperiment.",
+      "Wiring run persistence into the app store/UI belongs with M5 (provenance inspector), not M3.",
+      "Doc hygiene (out of milestone scope): sync docs/MILESTONES.md status labels (M1 ACTIVE/M2 LOCKED/M3 LOCKED) and the UI 'M1 active' copy with project-status.json (M3 active).",
+      "M6.6 owns persistence migration tests across Dexie versions (v1->v2); no shipped data yet."
     ]
   }
 }

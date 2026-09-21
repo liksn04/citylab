@@ -174,3 +174,45 @@ interface MetricSample {
 **Determinism/metric impact:** `metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(샘플링은 read-only
 파생). sample 스키마/필드나 cadence 기본값을 바꾸면 이 항목을 갱신한다. 저장 시 runtime 필드는 provenance와
 동일하게 persistence 계층이 부여한다(D-010).
+
+## D-012 — Experiment persistence: RunStore port + coordinator, Dexie v2 (M3.5)
+**Status:** accepted (M3)
+
+M3.5는 `ExperimentResult`(provenance + aggregate summary + raw samples)를 저장/로드한다. ARCHITECTURE
+의존 방향(`persistence ← run coordinator → simulation`, `simulation → Dexie` 금지)을 지키기 위해 3계층으로 나눈다.
+
+**(1) persistence port + 어댑터 (`src/persistence/db.ts`).**
+- 레코드만 아는 `RunStore` 인터페이스(port): `saveExperiment(bundle)`, `getExperiment(id)`,
+  `listExperiments()`, `getRuns(experimentId)`, `getSamples(runId)`, `loadBundle(experimentId)`.
+- `DexieRunStore`(실 IndexedDB 어댑터)와 `InMemoryRunStore`(Map 기반, 테스트/폴백)가 이 port를 구현한다.
+- 스키마를 `RunProvenance` 전체 + sample을 담도록 확장한다(**Dexie `version(2)`**): `RunRecord`에
+  `scenarioVersion`, `controllerId`, `simulationDurationSec`, runtime `startedAt`, `codeVersion|null`를 추가하고
+  (`controllerType` → `controllerId`), `MetricSampleRecord`를 `MetricSample` 전체 필드(activeVehicles·
+  completedVehicles·throughputPerHour 포함, `throughput`→`throughputPerHour`)로 맞춘다.
+
+**(2) coordinator (`src/runner/experimentPersistence.ts`).**
+persistence와 simulation을 잇는 유일한 지점. `experimentToRecords(result, meta)`(순수 매핑)와
+`recordsToExperiment(bundle)`(역매핑), `saveExperiment(store, result, meta)`/`loadExperiment(store, id)`.
+**simulation은 persistence/coordinator를 import하지 않는다**(금지된 `simulation → Dexie` 방지). coordinator만
+양쪽을 type-import 한다.
+
+**(3) runtime provenance 필드는 coordinator가 부여(D-010).** 결정론적 core는 `RunProvenance`(재현 부분)만
+만들고, `runId`, `startedAt`, `codeVersion`, `persistedAt(createdAt)`은 coordinator가 `meta`로 주입한다.
+테스트 결정성을 위해 `runId`는 기본적으로 `<experimentId>--<controllerId>--seed<seed>`로 파생(주입 가능).
+
+**reload-after-refresh 검증:** node 테스트 환경엔 IndexedDB가 없으므로 **`fake-indexeddb`(devDependency)**를
+쓴다. 저장 → 같은 db 이름으로 새 Dexie 인스턴스 오픈(=새로고침) → 동일 bundle 재조회로 durability를 증명한다.
+InMemoryRunStore로는 coordinator 매핑/roundtrip을 DB 없이 검증한다(TEST_STRATEGY: persistence round trip, M3).
+
+**Reason:** port/adapter로 나누면 (a) simulation이 Dexie를 모른 채로 유지되고, (b) coordinator 매핑을 DB 없이
+순수 검증하며, (c) 실제 IndexedDB durability는 fake-indexeddb로 재현 검증할 수 있다. 저장 스키마가 provenance
+전체를 담아야 export(M3.6/3.7)와 재분석이 가능하다.
+
+**Alternatives considered:**
+- (a) simulation이 Dexie 직접 호출 — ARCHITECTURE 위반, 테스트 난이도↑. 기각.
+- (b) port 없이 DexieRunStore 직접 사용 — DB 없는 순수 매핑 테스트 불가, node에서 검증 곤란. port로 분리.
+- (c) 요약만 저장하고 samples 제외 — "raw samples와 aggregate 구분"(M3 exit criteria)·export 재분석 불충족. 기각.
+
+**Determinism/metric impact:** `metricVersion`·`summary()`·simulation 궤적 **변경 없음**(순수 저장/로드).
+**migration 정책은 M6.6 소관** — 현재 배포/저장 데이터가 없어 `version(2)` 정의는 스키마 확정일 뿐이며, 버전 간
+migration 테스트는 M6에서 추가한다. 스키마를 다시 바꾸면 이 항목과 Dexie version을 함께 올린다.

@@ -1,5 +1,46 @@
 # Progress Log
 
+## 2026-09-21 — M3.5 experiment/run persistence (Dexie + coordinator + reload roundtrip)
+
+### Session objective
+M3.5: `ExperimentResult`(provenance + summary + samples)를 Dexie로 저장/로드한다. ARCHITECTURE 의존 방향을 지켜 simulation은 Dexie를 모르게 하고, coordinator가 persistence↔simulation을 잇는다. reload 후 재현을 fake-indexeddb로 증명한다.
+
+### Pre-code contract check (Phase C)
+- persistence 스키마 확장 + 아키텍처(포트/코디네이터) 결정 → 코딩 전 `docs/DECISIONS.md`에 **D-012** 기록. metric 의미/`summary()`/simulation 궤적 불변(순수 저장/로드).
+
+### Completed
+- `docs/DECISIONS.md` **D-012**: `RunStore` 포트 + `DexieRunStore`/`InMemoryRunStore` 어댑터 + coordinator(`src/runner`), Dexie `version(2)`(RunRecord에 provenance 전체 + runtime `startedAt`/`codeVersion`, `controllerType`→`controllerId`; `MetricSampleRecord`=full `MetricSample`), runtime 필드는 coordinator가 부여, fake-indexeddb devDep, migration은 M6 유예.
+- `src/persistence/db.ts`: 확장된 레코드 타입 + `RunSummaryRecord`(structural, persistence가 simulation을 import하지 않도록) + `ExperimentBundle` + `RunStore` 인터페이스 + Dexie `version(2)` + `DexieRunStore`(트랜잭션 저장/조회, getRuns는 runId 정렬로 storage-독립 결정성) + `InMemoryRunStore`(테스트/폴백).
+- `src/runner/experimentPersistence.ts`: `experimentToRecords`/`recordsToExperiment`(순수 매핑) + `saveExperiment`/`loadExperiment`(coordinator). runId/startedAt/codeVersion/createdAt는 `RuntimeMeta`로 주입(runId 기본 `<expId>--<controllerId>--seed<seed>`). **simulation은 이 모듈을 import하지 않음**(금지된 simulation→Dexie 방지).
+- 테스트: `experimentPersistence.test.ts`(8 — 매핑 정체성/runtime 필드/유일 runId/sample flatten·regroup/주입 runId/역매핑 roundtrip/in-memory save·load/list·getRuns·getSamples), `dexieRunStore.test.ts`(2 — fake-indexeddb로 저장→새 연결 재오픈→동일 재구성, raw 레코드 개수/샘플 시계열 확인).
+
+### M3 Exit Criteria 진전
+- [x] Fixed/MaxPressure 동일 seed set 비교 — M3.3.
+- [x] raw samples와 aggregate 구분 — M3.4 + 저장 스키마에서 runs(aggregate)와 metricSamples(raw) 분리.
+- [x] run마다 config hash / metric version 저장 — `RunRecord.configHash`/`metricVersion` persist + reload 확인.
+- [x] export 후 재분석 가능한 스키마(부분) — `recordsToExperiment`가 provenance+summary+samples 재구성; Dexie reload roundtrip 통과. 명시적 CSV/JSON export는 M3.6/3.7.
+
+### Golden/M2 보존
+- `summary()`/`metricVersion`/simulation 코드 무변경. `npm run check` 내 goldenRun + m2Comparison 통과 유지.
+
+### Tests actually run
+- `npm run check` → PASS (25 files, **165 tests**; 이전 155 + 신규 10; session ✓ active M3, tokens ✓, build ✓).
+- devDependency 추가: `fake-indexeddb@6.2.5`(테스트 전용, IndexedDB 없는 node에서 Dexie roundtrip 검증).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관, source of truth는 project-status.json).
+- persistence migration 테스트(version 간)는 M6.6 소관 — 현재 저장 데이터 없어 `version(2)` 정의만.
+
+### Next exact actions (M3 마무리)
+1. M3.6 CSV export: `PersistedExperiment`/`ExperimentResult`에서 sample 시계열 + summary/provenance 헤더를 스프레드시트 판독 가능한 CSV로. 순수 함수 + fixture 테스트.
+2. M3.7 JSON export/import roundtrip: 메타데이터 포함 재분석 스키마 확정(가져오기 시 스키마/버전 검증). `experimentToRecords`/`recordsToExperiment`와 정합.
+3. (선택) app store/UI에서 run 저장을 트리거하는 배선은 M5(analytics)에서 provenance inspector와 함께.
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1–M3.5 done; M3.6/M3.7 남음).
+
+---
+
 ## 2026-09-21 — M3.4 raw metric-sample schema (samples vs aggregate)
 
 ### Session objective
