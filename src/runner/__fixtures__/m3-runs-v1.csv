@@ -1,0 +1,3 @@
+experimentId,experimentName,scenarioId,scenarioVersion,controllerId,seed,configHash,metricVersion,simulationDurationSec,runId,ticks,simTimeSec,generated,admitted,completed,active,backlog,avgWaitingTimeSec,p95WaitingTimeSec,throughput,maxQueue,signalSwitches
+exp-csv-1,CSV export sample,balanced-4x4-v1,v1,fixed-v1,41021,m3-446e5c7517f10ae2,m1-metrics-v1,1800,exp-csv-1--fixed-v1--seed41021,3600,1800,599,599,585,14,0,12.446153846153846,37.5,585,5,1248
+exp-csv-1,CSV export sample,balanced-4x4-v1,v1,maxpressure-v1,41021,m3-7ec1965eecdd28cb,m1-metrics-v1,1800,exp-csv-1--maxpressure-v1--seed41021,3600,1800,599,599,593,6,0,3.1534569983136596,11,593,3,514

@@ -1,5 +1,46 @@
 # Progress Log
 
+## 2026-09-21 — M3.6 CSV export (spreadsheet-readable runs + samples tables)
+
+### Session objective
+M3.6: `PersistedExperiment`를 스프레드시트에서 바로 읽고 재분석 가능한 tidy CSV 두 개(runs aggregate / samples 시계열)로 내보낸다. 순수 함수 + golden fixture. metric 의미/`summary()` 불변.
+
+### Pre-code contract check (Phase C)
+- export 열 계약은 재분석 스키마(M3 exit) → 코딩 전 `docs/DECISIONS.md`에 **D-013** 기록. 순수 직렬화라 metric/`metricVersion`/simulation 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-013**: runs table(provenance + 전체 `RunSummary`, run당 1행) + samples table(raw 시계열, (run,sample)당 1행, run 정체성 비정규화), RFC 4180 quoting + CRLF + full-precision 숫자. `PersistedRun`에 `runId` 추가 명시.
+- `src/runner/experimentPersistence.ts`: `PersistedRun.runId`(저장된 `RunRecord.id`) 추가, `recordsToExperiment`가 채움. provenance/summary/samples 의미 불변(M3.5 테스트 그대로 통과).
+- `src/runner/experimentCsv.ts`: `experimentToCsv → { runsCsv, samplesCsv }` + `runsToCsv`/`samplesToCsv` + RFC 4180 `escapeField`(콤마/따옴표/개행 시 큰따옴표·내부 따옴표 이중화, CRLF, 헤더 행).
+- `src/runner/__fixtures__/m3-runs-v1.csv`, `m3-samples-v1.csv`: **실제 run→persist→reconstruct**에서 생성한 golden(하드코딩 아님). configHash가 m3-provenance fixture와 일치, 최종 누적 sample avgWait == aggregate avgWait로 정합.
+- 테스트: `experimentCsv.test.ts`(8) — fixture 재현, 정확한 헤더, CRLF, 행 수, 콤마/따옴표 escaping, full-precision, samples 없는 경우 헤더-only.
+
+### Build/infra 메모 (M3.6 테스트 지원, 최소 변경)
+- golden CSV를 fs로 읽는 테스트가 `node:fs`를 쓰는데 TS 7 네이티브 컴파일러가 `@types/*`를 자동 포함하지 않아 tsc 실패. `@types/node@20`(devDep) 추가 + `tsconfig.app.json`에 `"types": ["node", "vite/client"]` 명시로 해결. src(런타임) 코드 변경 없음.
+
+### M3 Exit Criteria 진전
+- [x] 동일 seed set 비교(M3.3) · [x] raw samples vs aggregate 구분(M3.4/M3.5) · [x] config hash / metric version 저장(M3.5).
+- [~] export 후 재분석 가능한 스키마 — CSV(runs/samples) 완료; JSON export/import roundtrip은 M3.7.
+
+### Golden/M2 보존
+- `summary()`/`metricVersion`/simulation 무변경. `npm run check` 내 goldenRun + m2Comparison + M3.1~M3.5 테스트 전부 통과.
+
+### Tests actually run
+- `npm run check` → PASS (26 files, **173 tests**; 이전 165 + 신규 8; session ✓ active M3, tokens ✓, build ✓).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관).
+
+### Next exact actions (M3 마무리)
+1. M3.7 JSON export/import roundtrip: `PersistedExperiment`(또는 `ExperimentBundle`)를 메타데이터(스키마/버전 포함) JSON으로 내보내고, import 시 스키마/버전 검증 후 재구성. `experimentToRecords`/`recordsToExperiment`와 정합, in-memory roundtrip 테스트 + golden.
+2. M3.7 완료 후 **M3 exit criteria 5개 전부 재평가** → 충족 시 AI_AGENT_GUIDE Milestone advancement protocol로 project-status를 M3 done, M4 active로 전진(단 DQN/TFJS는 M4 잠금 유지, 실제 학습 코드는 다음 세션).
+3. (범위 밖) 문서/카피 동기화 별도 slice.
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1–M3.6 done; M3.7 남음).
+
+---
+
 ## 2026-09-21 — M3.5 experiment/run persistence (Dexie + coordinator + reload roundtrip)
 
 ### Session objective

@@ -34,6 +34,8 @@ export interface RuntimeMeta {
 
 /** A single run reconstructed from storage, ready for re-analysis. */
 export interface PersistedRun {
+  /** Stored runId (runtime-assigned), kept for correlating samples/exports. */
+  runId: string
   provenance: RunProvenance
   summary: RunSummary
   samples: MetricSample[]
@@ -112,6 +114,7 @@ export function recordsToExperiment(bundle: ExperimentBundle): PersistedExperime
   for (const list of samplesByRun.values()) list.sort((a, b) => a.simTimeSec - b.simTimeSec)
 
   const runs: PersistedRun[] = bundle.runs.map((r) => ({
+    runId: r.id,
     provenance: {
       scenarioId: r.scenarioId,
       scenarioVersion: r.scenarioVersion,

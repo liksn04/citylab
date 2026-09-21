@@ -216,3 +216,34 @@ InMemoryRunStore로는 coordinator 매핑/roundtrip을 DB 없이 검증한다(TE
 **Determinism/metric impact:** `metricVersion`·`summary()`·simulation 궤적 **변경 없음**(순수 저장/로드).
 **migration 정책은 M6.6 소관** — 현재 배포/저장 데이터가 없어 `version(2)` 정의는 스키마 확정일 뿐이며, 버전 간
 migration 테스트는 M6에서 추가한다. 스키마를 다시 바꾸면 이 항목과 Dexie version을 함께 올린다.
+
+## D-013 — CSV export schema (M3.6)
+**Status:** accepted (M3)
+
+M3.6은 `PersistedExperiment`를 스프레드시트에서 바로 읽고 재분석할 수 있는 **tidy CSV 두 개**로 내보낸다
+(`src/runner/experimentCsv.ts`, 순수 함수 `experimentToCsv → { runsCsv, samplesCsv }`).
+
+- **runs table** — run당 1행(aggregate). 열: `experimentId, experimentName, scenarioId, scenarioVersion,
+  controllerId, seed, configHash, metricVersion, simulationDurationSec, runId,` 그리고 `RunSummary` 전체
+  (`ticks, simTimeSec, generated, admitted, completed, active, backlog, avgWaitingTimeSec, p95WaitingTimeSec,
+  throughput, maxQueue, signalSwitches`).
+- **samples table** — (run, sample)당 1행(raw 시계열). 열: `experimentId, runId, controllerId, seed, simTimeSec,
+  activeVehicles, completedVehicles, avgWaitSec, throughputPerHour, maxQueue`. run 정체성(runId/controllerId/seed)을
+  **비정규화**해 join 없이 pivot 가능하게 한다.
+- **형식:** RFC 4180 준수 — 첫 행은 헤더, 콤마/따옴표/개행 포함 필드는 큰따옴표로 감싸고 내부 따옴표는 두 배(`""`),
+  줄 종결자는 `\r\n`. 숫자는 JS 기본 표현(전체 정밀도)으로 그대로 출력해 손실이 없게 한다(재분석 가능).
+- **입력 보강:** 상관(correlation)을 위해 `PersistedRun`에 `runId`(저장된 `RunRecord.id`)를 추가하고
+  `recordsToExperiment`가 채운다. provenance/summary/samples 의미는 불변.
+
+**Reason:** aggregate 비교와 시계열 분석은 스프레드시트 워크플로에서 서로 다른 표 형태를 원한다. 두 tidy 표 +
+비정규화 run 정체성은 pivot/필터/차트를 join 없이 가능케 한다. full-precision 숫자와 RFC 4180 escaping은 왕복
+손실을 막는다(M3 exit: export 후 재분석 가능).
+
+**Alternatives considered:**
+- (a) 단일 CSV에 summary/provenance를 헤더 블록으로 얹고 아래에 samples — 다중 섹션은 스프레드시트가 한 표로 못
+  읽어 기각. 두 표로 분리.
+- (b) wide 포맷(샘플 metric을 열로 펼침) — 가변 열/희소성으로 재분석이 어려워 tidy(long) 채택.
+- (c) 로케일 종속 숫자 포맷/반올림 — 왕복 손실 위험으로 기각(JS 기본 표현 유지).
+
+**Determinism/metric impact:** `metricVersion`·`summary()`·simulation 궤적 **변경 없음**(순수 직렬화). CSV
+열 집합/순서/escaping을 바꾸면 이 항목과 golden CSV fixture(`src/runner/__fixtures__/m3-*-v1.csv`)를 함께 갱신한다.
