@@ -1,5 +1,61 @@
 # Progress Log
 
+## 2026-09-21 — M4.2 shared-DQN action adapter + injectable policy seam (no training)
+
+### Session objective
+M4.2: shared-DQN의 `HOLD | SWITCH` action 공간을 기존 `Controller` 계약으로 매핑하는 어댑터를 **주입식 policy seam**으로
+구현한다. min-green/yellow safety는 환경(`applySignalIntent`) 소유를 유지한다. 학습/텐서/모델 없음.
+
+### Pre-code contract check (Phase C)
+- action 공간·매핑·주입 seam은 아키텍처/decision-semantics → 코딩 전 `docs/DECISIONS.md` **D-016** +
+  `docs/DATA_CONTRACTS.md` "Action space — M4" 기록. 엔진 실행 경로 무배선이라 metric/`summary()`/golden 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-016**: (1) 이산 action 공간 `ACTIONS=['HOLD','SWITCH']`(index 0/1), `ACTION_SIZE=2`,
+  `actionToIntent`/`intentToAction`; (2) 주입식 `Policy=(number[])=>number` seam + `DqnController`(Controller 구현,
+  encode→policy→actionToIntent); (3) 안전은 환경 소유 유지(agent는 색/yellow 미지정, yellow는 HOLD 가드). 엔진
+  `controllerKind='dqn'` 배선/provenance 확장은 실제 policy가 필요한 M4.9/M4.10로 미룸. 대안 4개 기록.
+- `docs/DATA_CONTRACTS.md` "Action space — M4 (D-016)": index↔intent 계약, Q-output/replay가 순서에 의존함 명시.
+- `src/rl/action.ts`: `ACTIONS`/`ACTION_SIZE`/`actionToIntent`(범위·정수 검증, 예외)/`intentToAction`.
+- `src/rl/DqnController.ts`: `Policy` 타입 + `DqnController implements Controller<ObservationInput>`. `observe`는 full
+  input 통과, `decide`는 yellow HOLD 가드 후 `encodeObservation`(M4.1)→주입 policy→`actionToIntent`. **텐서/학습 없음**
+  (policy 주입식). id 기본 `dqn-v1`.
+- `src/rl/action.test.ts`(4): action 순서/크기, index↔intent 매핑, 범위 밖·비정수 예외, 양방향 roundtrip.
+- `src/rl/DqnController.test.ts`(7): 기본/커스텀 id, observe full input, action→intent 매핑, **policy가 인코딩 벡터를
+  받음**(spy로 encodeObservation 일치·길이), yellow 가드(policy 미호출·no throw), 결정성, **환경 소유 safety**
+  (항상-SWITCH policy를 `applySignalIntent`로 구동해도 min-green 전 스위치 불가, 첫 스위치가 정확히 min-green에서,
+  yellow 경유).
+
+### M4 Exit Criteria 진전
+- M4.2도 exit criterion 자체가 아니라 어댑터 토대. M4 exit(학습 non-blocking, tensor leak, eval seed 고정, train/eval
+  분리, model snapshot, Fixed 대비 반복 eval 개선, 실패 scenario 기록)는 **미착수**. milestone 상태/게이트 변경 없음
+  (M4 계속 active).
+
+### 금지 지름길 준수
+- DQN update/TensorFlow.js/replay buffer/target network/Web Worker/model save·load **미구현**. 어댑터는 policy를
+  주입만 받는 seam. 엔진 실행 경로 무배선 → `summary()`/`metricVersion`/golden/m2 fixture 불변. UI 배선 없음.
+
+### Tests actually run
+- `npm run check` → PASS (30 files, **206 tests**; 이전 195 + 신규 11). session:check active M4 ✓, tokens ✓, build ✓.
+
+### Known issue / env note
+- 이전과 동일한 환경 이슈: `npm install`은 ERESOLVE(vitest@5 peerOptional @types/node vs 루트 @types/node@20)로
+  `--legacy-peer-deps` 필요. 코드/package.json 무변경.
+
+### Next exact actions (M4 계속)
+1. M4.3 replay buffer(`src/rl/`): 순수 ring buffer(capacity, push(transition), sample(batchSize, rng)) — 결정론적
+   시드 샘플링 테스트. transition은 {obs:number[], action:number, reward:number, nextObs:number[], done:boolean}.
+   reward 정의(대기/throughput 기반)는 decision-semantics → 코딩 전 DECISIONS 기록(reward는 실험 지표라 ADR 필수).
+2. M4.4 online+target network(TensorFlow.js): 입력 `OBSERVATION_SIZE`→은닉→`ACTION_SIZE` Q-head, target 복제; shape
+   테스트 + tensor dispose. 3. M4.5 epsilon 스케줄(결정론). 4. M4.6 DQN update step(loss 유한, 텐서 dispose).
+3. M4.7 training worker 프로토콜 → M4.8 model save/load(예측 parity) → M4.9 evaluation runner(엔진에 dqn 배선 +
+   provenance, train/eval seed 분리) → M4.10 Fixed 대비 반복-seed eval(실패도 기록).
+
+### Active milestone
+M4 — Shared DQN Training (M4.1/M4.2 done; M4.3–M4.10 남음).
+
+---
+
 ## 2026-09-21 — M4.1 shared-DQN observation encoder/normalizer (no training)
 
 ### Session objective

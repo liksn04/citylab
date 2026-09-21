@@ -337,3 +337,47 @@ green에서만 일어나므로 손실이 없다.
 feature 집합/순서/스케일이나 tanh·clamp 방식을 바꾸면 앞으로 모든 model이 보는 입력이 달라지므로 이 결정(및 관측/모델
 fixture)을 함께 갱신한다. 의존 방향은 합법 유지: `rl → controller contract`(`ObservationInput` 타입 import) + `rl`이
 `simulation/constants`를 읽음 — 금지된 `simulation → rl` 간선 없음(ARCHITECTURE).
+
+## D-016 — Shared-DQN action adapter & injectable policy seam (M4.2)
+**Status:** accepted (M4)
+
+M4는 학습하는 정책을 **기존 `Controller` 계약**(D-008)으로 구동해 Fixed/MaxPressure와 common random numbers 비교
+(D-006)를 가능케 한다. 그러려면 (1) 이산 action 공간과 SignalIntent 매핑, (2) network를 나중에 끼울 수 있는 seam이
+필요하다. 이 슬라이스는 어댑터·seam·매핑만 만들고 **학습/텐서/모델은 만들지 않는다**(잠금 유지).
+
+**(1) action 공간 (`src/rl/action.ts`).** MVP action은 `HOLD | SWITCH` 둘(D-002). 이를 **고정 순서 이산 인덱스**로 둔다:
+`ACTIONS = ['HOLD', 'SWITCH']`(index 0 = HOLD, 1 = SWITCH), `ACTION_SIZE = 2`. `actionToIntent(i)`는 인덱스를
+`SignalIntent`로(범위 밖은 예외), `intentToAction(intent)`는 역매핑(baseline transition을 저장할 때 쓰임). 이 순서는
+Q-output 헤드·replay buffer가 의존하므로 바꾸면 이 결정과 모델/버퍼 fixture를 함께 갱신한다.
+
+**(2) 주입식 policy seam + 어댑터 컨트롤러 (`src/rl/DqnController.ts`).** `Policy = (observation: number[]) => number`는
+인코딩된 관측(M4.1, 길이 `OBSERVATION_SIZE`)을 받아 action 인덱스를 돌려주는 **주입식** 함수다. `DqnController`는
+`Controller<ObservationInput>`을 구현하고 `observe`는 full input을 통과, `decide`는 `encodeObservation` → `policy` →
+`actionToIntent` 순으로 HOLD|SWITCH intent만 방출한다. 학습 전에는 결정론적 stub(예: 항상 HOLD, 또는 테스트 정책)을
+주입하고, 이후 슬라이스(M4.6/M4.8)에서 TensorFlow.js 모델 기반 policy를 주입한다 — **이 파일엔 텐서/학습이 없다**.
+
+**(3) 안전은 환경 소유 유지.** `decide`가 yellow(`activeAxis===null`)에 호출되면 `encodeObservation`(green 전용)에
+YELLOW를 먹이지 않도록 HOLD로 가드한다(환경도 yellow엔 controller 미호출). min-green·yellow 강제는 전적으로
+`applySignalIntent`가 소유한다 — 정책이 매 tick SWITCH를 원해도 환경이 min-green 전에는 무시하고 모든 switch를 full
+yellow로 통과시킨다(D-008). 즉 **agent는 색/yellow를 직접 정할 수 없다**.
+
+**이 슬라이스는 엔진 실행 경로에 배선하지 않는다.** `TrafficEngine`의 `controllerKind`에 `'dqn'`을 추가하거나
+provenance/runConfig를 확장하는 것은 **실제 policy가 필요한** evaluation 슬라이스(M4.9/M4.10)로 미룬다(scope 최소화,
+그때 D-010 provenance와 함께 처리).
+
+**Reason:** 어댑터를 `Controller`로 두면 학습 정책이 baseline과 같은 환경·같은 안전 계약·같은 비교 축(D-006)을 쓴다.
+policy를 주입식 함수로 분리하면 (a) 학습 코드 없이 어댑터를 순수하게 테스트하고, (b) 안전이 환경 소유임을 정책과 무관하게
+증명하며, (c) 이후 TFJS 모델을 텐서 걱정 없이 끼울 seam이 생긴다. 이산 인덱스↔intent 매핑을 명시하면 replay buffer와
+Q-output이 안정된 계약 위에 놓인다.
+
+**Alternatives considered:**
+- (a) `DqnController`가 모델을 직접 소유(생성자에서 TFJS 로드) — 학습/텐서가 어댑터에 결합돼 순수 테스트 불가, 잠금 위반.
+  policy 주입으로 분리.
+- (b) action을 SignalIntent 문자열로 바로 표현(인덱스 없음) — Q-output(수치 헤드)·replay 저장과 어긋남. 인덱스 채택.
+- (c) 컨트롤러가 min-green/yellow를 자체 처리 — 안전을 agent에 위임하게 되어 D-008 위반. 환경 소유 유지.
+- (d) 지금 엔진 `controllerKind='dqn'`까지 배선 — 실제 policy·provenance 확장이 필요해 M4.9로 미룸.
+
+**Determinism/metric impact:** 보고 metric·`metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(엔진 실행 경로
+무배선, 순수 어댑터). 주어진 결정론적 policy에 대해 `decide`는 결정론적. action 순서/매핑을 바꾸면 이 결정과 이후 모델·
+버퍼 fixture를 함께 갱신한다. 의존 방향 합법: `rl → controller contract` + `rl` 내부(action↔observation) — `simulation
+→ rl` 간선 없음(ARCHITECTURE).

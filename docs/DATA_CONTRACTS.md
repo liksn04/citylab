@@ -171,3 +171,11 @@ shared DQN이 보는 per-intersection observation은 보고 metric이 아니라 
 - 스케일은 단일 출처 상수에서 파생: `PRESSURE_OBS_SCALE = EDGE_CAPACITY`, `PHASE_TIME_OBS_SCALE = FIXED_GREEN_SEC`.
 - **green 전용:** encoder는 `activeAxis ≠ null`(green)에서만 정의된다(controller가 호출되는 순간). YELLOW
   observation은 예외를 던진다(Q4: yellow 동안 결정 없음). 모든 출력 성분은 유한하고 위 범위 안이다.
+
+## Action space — M4 (D-016)
+
+shared DQN의 action은 MVP에서 `HOLD | SWITCH` 둘뿐이다(D-002). 이를 고정 순서 이산 인덱스로 계약한다
+(`src/rl/action.ts`): `ACTIONS = ['HOLD', 'SWITCH']` → index 0 = HOLD, 1 = SWITCH, `ACTION_SIZE = 2`.
+`actionToIntent(i)`가 인덱스를 `SignalIntent`로, `intentToAction(intent)`가 역매핑한다. 이 순서는 Q-output 헤드와
+replay buffer가 의존하는 계약이므로 바꾸면 D-016과 모델/버퍼 fixture를 함께 갱신한다. agent는 색/yellow를 직접
+정하지 않으며 min-green·yellow는 환경(`applySignalIntent`)이 강제한다(Q4, D-008).
