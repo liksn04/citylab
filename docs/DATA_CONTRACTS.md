@@ -151,3 +151,23 @@ throughputPerHour, maxQueue }`. 정의는 `src/analytics/metricSamples.ts`가 �
 - sample의 `maxQueue`는 **그 tick의 순간 최대 단일-edge queue**(Q2), `RunSummary.maxQueue`는 **run 전체
   최댓값**이다 → 항상 `RunSummary.maxQueue ≥ max(sample.maxQueue)`. 두 값을 혼용하지 않는다.
 - 샘플링은 read-only(`TrafficEngine.sample()`)이며 tick 로직·`summary()`·결정성에 영향이 없다.
+
+## Observation encoding — M4 (D-015)
+
+shared DQN이 보는 per-intersection observation은 보고 metric이 아니라 RL **제어 입력** 표현이다(`metricVersion`과
+무관, pressure/D-009와 같은 범주). 정의는 `src/rl/observation.ts`가 소유하며, 환경이 매 green 결정 tick에 controller에게
+넘기는 `ObservationInput`(base timing + lane pressure)에서 **순수 함수**로 파생한다. 하나의 network를 모든 교차로·phase가
+공유하므로 인코딩은 **현재 green axis 기준 상대값**으로 고정한다(D-002/D-015).
+
+고정 길이 벡터 `OBSERVATION_SIZE = 4`, 순서는 `OBSERVATION_FEATURES`:
+
+1. `pressureCurrent = tanh(pressure[current] / PRESSURE_OBS_SCALE)` ∈ [−1, 1] (float64에서 큰 값은 ±1로 포화)
+2. `pressureOther   = tanh(pressure[other]   / PRESSURE_OBS_SCALE)` ∈ [−1, 1] (float64에서 큰 값은 ±1로 포화)
+3. `phaseProgress   = clamp(phaseElapsedSec / PHASE_TIME_OBS_SCALE, 0, 1)` ∈ [0, 1]
+4. `minGreenSatisfied ∈ {0, 1}`
+
+- `current = input.activeAxis`, `other`는 그 반대 axis. **NS green과 EW green은 pressure를 대칭으로 주면 동일한
+  벡터**를 만든다(phase-대칭 shared 인코딩).
+- 스케일은 단일 출처 상수에서 파생: `PRESSURE_OBS_SCALE = EDGE_CAPACITY`, `PHASE_TIME_OBS_SCALE = FIXED_GREEN_SEC`.
+- **green 전용:** encoder는 `activeAxis ≠ null`(green)에서만 정의된다(controller가 호출되는 순간). YELLOW
+  observation은 예외를 던진다(Q4: yellow 동안 결정 없음). 모든 출력 성분은 유한하고 위 범위 안이다.

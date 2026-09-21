@@ -1,5 +1,68 @@
 # Progress Log
 
+## 2026-09-21 — M4.1 shared-DQN observation encoder/normalizer (no training)
+
+### Session objective
+M4.1: per-intersection green observation을 shared DQN용 고정 길이 정규화 벡터(current/other 상대 인코딩)로 바꾸는
+순수 encoder/normalizer를 경계·정규화 테스트와 함께 구현한다. 학습 코드(replay/target/worker/model)는 없음.
+
+### Pre-code contract check (Phase C)
+- observation 인코딩은 agent가 "보는" 제어 입력 정의(decision-semantics) → 코딩 전 `docs/DECISIONS.md` **D-015** +
+  `docs/DATA_CONTRACTS.md` "Observation encoding — M4" 기록. 보고 metric/`summary()`/simulation 궤적 불변이라
+  `metricVersion` 유지(`m1-metrics-v1`, pressure/D-009와 같은 범주).
+
+### Completed
+- `docs/DECISIONS.md` **D-015**: shared network + per-intersection observation(D-002)에 맞춘 인코딩 확정. 입력은 엔진이
+  이미 controller에 넘기는 `ObservationInput`(base timing + pressure) — **새 engine seam 없음**. current/other 상대
+  프레이밍(대칭 2-phase에서 phase-대칭), feature 순서·길이 고정, 스케일은 sim 상수 파생, green 전용(yellow는 예외).
+  대안 4개(절대+one-hot / min-max·z-score / raw queue load 포함 / yellow 중립벡터)와 determinism/metric impact 기록.
+- `docs/DATA_CONTRACTS.md` "Observation encoding — M4 (D-015)": 벡터 스키마·범위·green 전용 계약을 "Control signals"와
+  나란히 명시.
+- `src/rl/observation.ts`: `encodeObservation(input)` → 길이 4 벡터
+  `[tanh(pC/S), tanh(pO/S), clamp01(elapsed/T), minGreen?1:0]`. `OBSERVATION_FEATURES`/`OBSERVATION_SIZE`,
+  `PRESSURE_OBS_SCALE = EDGE_CAPACITY(16)`, `PHASE_TIME_OBS_SCALE = FIXED_GREEN_SEC(20)` — 하드코딩 없이 단일 출처
+  파생. YELLOW(`activeAxis===null`)는 명확한 에러. 순수·결정론적, 의존 방향 합법(`rl → controller contract` + rl이
+  simulation 상수 read).
+- `src/rl/observation.test.ts`(13): feature 순서/길이, 상수 파생, zero 벡터, current/other 매핑, **phase 대칭성**
+  (NS green ↔ EW green + pressure swap 동일), 부호 보존, tanh 스케일 기준(=tanh(1)), 극단값 [−1,1] 유계·유한,
+  phaseProgress [0,1] clamp(상·하한), minGreen 0/1, 전-극단 all-finite, 순수성(무변이·결정성), YELLOW throw.
+- `src/rl/README.md`: M4 active로 갱신(encoder landed; replay/target/worker/model/eval은 이후 M4 슬라이스 잠금 유지).
+
+### M4 Exit Criteria 진전
+- M4.1은 exit criterion 자체가 아니라 그 토대(observation 스키마). M4 exit(학습 루프 non-blocking, tensor leak,
+  eval seed 고정, train/eval seed 분리, model snapshot, Fixed 대비 반복 eval 개선, 실패 scenario 기록)는 **미착수** —
+  다음 슬라이스들. 이번 세션에서 milestone 상태/게이트 변경 없음(M4 계속 active).
+
+### 금지 지름길 준수
+- DQN/TensorFlow.js/replay buffer/target network/Web Worker/model save·load **미구현**(activeMilestone 앞선 기능 금지).
+  observation 인코더만 추가. UI 배선 없음. golden/m2 fixture·`summary()`·`metricVersion` 불변.
+
+### Tests actually run
+- `npm run test` → PASS (28 files, **195 tests**; 이전 182 + 신규 13). golden + m2Comparison 계속 통과.
+- `npm run build` → PASS (tsc -b + vite build).
+- `npm run check` → PASS (session:check active M4 ✓, tokens:check ✓, test ✓, build ✓).
+
+### Known issue / env note
+- **환경 전용**: 이 워크트리에서 `npm install`이 ERESOLVE(`vitest@5`의 `peerOptional @types/node ^22||>=24` vs 루트
+  `@types/node@20`)로 실패해 `fake-indexeddb`가 빠져 `dexieRunStore.test.ts`가 로드 실패했다. 코드/`package.json`
+  변경 없이 `npm install --legacy-peer-deps`로 node_modules를 완성해 해결(프로젝트 산출물 무변경, 설치 플래그일 뿐).
+  다음 세션도 의존성 설치 시 이 플래그가 필요할 수 있음.
+
+### Next exact actions (M4 계속)
+1. M4.2 action adapter: `HOLD | SWITCH`를 기존 `Controller` 계약으로 매핑하는 어댑터(`src/rl/` 또는 `controllers/`).
+   min-green/yellow는 환경(`signalMachine.applySignalIntent`) 소유 유지 — agent가 색/yellow 미지정. 안전 테스트가
+   환경 소유임을 유지. 아직 학습 없음(정책은 이후 주입 가능한 seam).
+2. M4.3 replay buffer(순수, 결정론적 샘플링 테스트) → M4.4 online+target network(shape 테스트) → M4.5 epsilon
+   스케줄(결정론) → M4.6 DQN update step(loss 유한, tensor dispose 검사).
+3. M4.7 training worker 프로토콜(메시지 통합 테스트, ARCHITECTURE의 main↔worker 경계) → M4.8 model save/load
+   (예측 parity) → M4.9 evaluation runner(train/eval seed 분리, TEST_STRATEGY) → M4.10 baseline 대비 반복-seed eval.
+4. observation이 pressure-only로 약하면 D-015 (c) 대안(raw queue load 포함)으로 ADR bump 후 `ObservationInput` seam 확장.
+
+### Active milestone
+M4 — Shared DQN Training (M4.1 done; M4.2–M4.10 남음).
+
+---
+
 ## 2026-09-21 — M3.7 JSON export/import + M3 COMPLETE (advanced to M4 active)
 
 ### Session objective

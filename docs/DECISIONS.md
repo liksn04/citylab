@@ -286,3 +286,54 @@ JSON이 필요하다. `format`/`schemaVersion` 태그는 이후 스키마 진화
 **Determinism/metric impact:** `metricVersion`·`summary()`·simulation 궤적 **변경 없음**(순수 직렬화/역직렬화).
 `schemaVersion`이나 봉투 필드를 바꾸면 이 항목·`EXPERIMENT_EXPORT_SCHEMA_VERSION`·golden fixture
 (`src/runner/__fixtures__/m3-export-v1.json`)를 함께 갱신하고, 구버전 import 경로(migration/거부)를 정의한다.
+
+## D-015 — Shared-DQN observation encoding (M4.1)
+**Status:** accepted (M4)
+
+M4는 shared policy network + per-intersection observation을 쓴다(D-002). 그 observation을 만드는 계층으로
+**순수 encoder**(`src/rl/observation.ts`)를 도입한다. encoder는 환경이 **매 green 결정 tick마다 이미 controller에게
+넘기는** per-intersection `ObservationInput`(base timing + lane pressure, M2.3/D-008)을 입력으로 받는다. 이 슬라이스는
+엔진에 새 observation seam을 추가하지 않는다 — 기존 `ObservationInput`을 그대로 소비한다(scope 최소화).
+
+**(1) current/other 상대 프레이밍.** action이 대칭 2-phase(NS/EW) 신호에 대한 `HOLD | SWITCH`(D-002)이고 하나의
+network를 모든 교차로·phase가 **공유**하므로, observation을 절대 NS/EW가 아니라 **현재 green axis 기준 상대값**으로
+인코딩한다. 고정 순서 feature(`OBSERVATION_FEATURES`):
+
+1. `pressureCurrent = tanh(pressure[current] / PRESSURE_OBS_SCALE)`
+2. `pressureOther   = tanh(pressure[other]   / PRESSURE_OBS_SCALE)`
+3. `phaseProgress   = clamp01(phaseElapsedSec / PHASE_TIME_OBS_SCALE)`
+4. `minGreenSatisfied = input.minGreenSatisfied ? 1 : 0`
+
+→ 벡터 길이 `OBSERVATION_SIZE = 4`. `current`는 `input.activeAxis`, `other`는 그 반대 axis.
+
+**(2) 정규화.** lane pressure는 부호 있는 무한정값(up−down, D-009)이라 `tanh`로 [−1,1]에 부드럽게 squash한다
+(부호 보존, 임의 크기에서도 ±1로 포화만 하고 NaN/Inf 없음 → shared net 입력이 항상 유계). 스케일은 magic number가 아니라
+**단일 출처(`src/simulation/constants.ts`)에서 파생한 named constant**다: `PRESSURE_OBS_SCALE = EDGE_CAPACITY`
+(approach 하나가 꽉 찬 정도 ≈ tanh 후 0.76), `PHASE_TIME_OBS_SCALE = FIXED_GREEN_SEC`(nominal green 1개 = 1.0).
+`phaseProgress`는 [0,1]로 clamp한다.
+
+**(3) green 전용 precondition.** encoder는 green observation(`activeAxis ≠ null`)에서만 정의된다 — 환경이 controller를
+호출하는 바로 그 순간이다(yellow 동안 controller 미호출, D-008). YELLOW observation은 **예외를 던진다**. 그래야 잘못
+넘어온 yellow 상태가 조용히 틀린 current/other 프레임으로 인코딩되지 않는다. 결정(따라서 이후 저장될 transition)은
+green에서만 일어나므로 손실이 없다.
+
+**Reason:** 대칭 2-phase 신호에서 shared network는 observation이 phase-대칭일 때 훨씬 잘 일반화한다 — "현재 axis가 더
+혼잡 vs 반대 axis가 더 혼잡"이라는 같은 상황이 NS green이든 EW green이든 **동일하게** 인코딩되어야 `HOLD|SWITCH`
+결정에 바로 쓰인다. 이는 MaxPressure 결정 신호(현재 vs 반대 pressure 비교, D-009)와 같은 프레임이라 observation이
+학습-free baseline과 직접 비교 가능하고 inspector에서 읽힌다(M5.6). 스케일을 sim constants에서 파생하면 단일 출처를
+유지하고 하드코딩 숫자를 피한다(핵심 제약). tanh+clamp는 혼잡도와 무관하게 유계·유한 입력을 보장한다.
+
+**Alternatives considered:**
+- (a) 절대 NS/EW pressure + active-axis one-hot(5-dim) — network가 phase 대칭성을 스스로 학습해야 해 파라미터·샘플이
+  더 든다(우리가 구조로 넣을 수 있는 성질). 상대 인코딩이 부족하면 되돌릴 fallback으로 남김.
+- (b) pressure의 min-max/z-score 정규화 — 데이터셋 통계(비결정·데이터 의존)가 필요하고 미관측 극단에서 overflow.
+  tanh는 무상태·total이라 채택.
+- (c) 차분 pressure 외에 axis별 raw queue 크기(load)도 포함 — 엔진 `ObservationInput` seam 확장이 필요해 보류.
+  M4.10 evaluation에서 pressure-only가 약하면 ADR bump로 확장(관측/모델 fixture 동반).
+- (d) yellow에서 예외 대신 중립 벡터 반환 — 정의가 모호한 프레임으로 조용히 학습할 위험. 예외로 대체.
+
+**Determinism/metric impact:** 보고 metric·`metricVersion`·`summary()`·golden/m2 fixture **변경 없음** — observation은
+집계 metric이 아니라 RL 제어-입력 표현이다(pressure/D-009도 `metricVersion` 무관인 것과 동일). encoder는 순수·결정론적.
+feature 집합/순서/스케일이나 tanh·clamp 방식을 바꾸면 앞으로 모든 model이 보는 입력이 달라지므로 이 결정(및 관측/모델
+fixture)을 함께 갱신한다. 의존 방향은 합법 유지: `rl → controller contract`(`ObservationInput` 타입 import) + `rl`이
+`simulation/constants`를 읽음 — 금지된 `simulation → rl` 간선 없음(ARCHITECTURE).
