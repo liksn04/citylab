@@ -51,6 +51,13 @@ export const FIXED_GREEN_SEC = 20
  */
 export const METRIC_VERSION = 'm1-metrics-v1'
 
+/**
+ * Default cadence for raw metric-sample time series (seconds, D-011). Reporting
+ * cadence, not physics — must be a whole multiple of TICK_SEC so samples land on
+ * exact ticks. Sampling is read-only and never affects the simulation.
+ */
+export const DEFAULT_SAMPLE_INTERVAL_SEC = 30
+
 /** Distance a free-flowing vehicle covers in one tick (meters). Derived. */
 export const FREE_FLOW_STEP_M = FREE_FLOW_SPEED_MPS * TICK_SEC
 

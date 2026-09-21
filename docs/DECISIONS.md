@@ -134,3 +134,43 @@ Q5, R8)라 암호학적 강도가 필요 없기 때문이다. provenance를 **�
 **Determinism/metric impact:** 보고 metric·`metricVersion`·golden/m2 fixture **변경 없음**(provenance는 순수
 파생 메타데이터, 시뮬레이션 궤적에 영향 없음). config canonicalization/hash 알고리즘이나 `RunConfig` 필드 집합을
 바꾸면 이전 configHash와 불일치하므로 이 항목을 갱신하고 저장된 provenance를 재생성해야 한다.
+
+## D-011 — Raw metric-sample time series vs aggregate summary (M3.4)
+**Status:** accepted (M3)
+
+M3는 aggregate 요약(`RunSummary`)과 **raw per-sample 시계열**을 명확히 구분한다(M3 exit criteria: "raw
+samples와 aggregate 구분"). raw sample은 run 동안 고정 cadence로 찍는 live aggregate 신호의 스냅샷이다:
+
+```ts
+interface MetricSample {
+  simTimeSec: number          // 이 샘플 시각
+  activeVehicles: number      // 이 시각의 네트워크 내 차량 수
+  completedVehicles: number   // 지금까지 도착(ARRIVED) 누계
+  avgWaitSec: number          // 완료 trip 평균 대기 (누계, M1 정의 재사용)
+  throughputPerHour: number   // 누계 throughput의 시간율
+  maxQueue: number            // 이 시각의 순간 최대 단일-edge queue (Q2 정의)
+}
+```
+
+- **cadence**는 `TICK_SEC`의 정수배(기본 `DEFAULT_SAMPLE_INTERVAL_SEC`)여야 하며, 샘플은 `simTimeSec`로
+  자기기술한다(별도 cadence 필드 불필요). 정수배가 아니면 러너가 예외를 던진다(결정론적 격자 유지).
+- **maxQueue 의미 구분:** sample의 `maxQueue`는 **그 tick의 순간값**(`maxQueueSnapshot`)이고,
+  `RunSummary.maxQueue`는 **run 전체 tick의 최댓값**(aggregate)이다. 따라서 항상
+  `RunSummary.maxQueue ≥ max(sample.maxQueue)`. 두 값의 의미가 다르므로 혼용하지 않는다.
+- **비침습(non-invasive):** 샘플링은 read-only다. `TrafficEngine.sample()`은 현재 상태에서 파생값만 읽고
+  tick 로직/상태를 바꾸지 않으며, `summary()` 형태와 tick 경로에 영향이 없다. 샘플을 수집하는 러너
+  (`runScenarioSampled`)는 `runScenario`(M2 fixture가 잠근 경로)와 **분리**된 신규 경로다.
+
+**Reason:** 평균만 보면 놓치는 tail/시간적 혼잡(R2)을 시계열로 관찰·export하려면 aggregate와 별개의 raw
+표현이 필요하다. 재사용 가능한 read model이어야 persistence(M3.5)와 export(M3.6/3.7)가 같은 스키마를 쓴다.
+샘플은 기존 metric 정의(avgWait/throughput/queue)를 **순간에 적용**한 것이므로 새 metric 의미가 아니다 →
+`metricVersion`은 그대로 `m1-metrics-v1`.
+
+**Alternatives considered:**
+- (a) tick마다 전체 샘플 저장 — 3600 tick × run 수만큼 데이터 폭증, 분석 이득 대비 과다. 고정 cadence로 대체.
+- (b) sample의 maxQueue를 running-max로 — aggregate와 중복되고 시간적 혼잡 변화를 못 보여줘 기각(순간값 채택).
+- (c) 엔진 tick 안에 샘플 push를 심음 — tick 경로/결정성/golden에 위험. read-only `sample()` + 러너 수집으로 분리.
+
+**Determinism/metric impact:** `metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(샘플링은 read-only
+파생). sample 스키마/필드나 cadence 기본값을 바꾸면 이 항목을 갱신한다. 저장 시 runtime 필드는 provenance와
+동일하게 persistence 계층이 부여한다(D-010).

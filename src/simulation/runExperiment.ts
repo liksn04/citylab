@@ -1,5 +1,7 @@
+import type { MetricSample } from '../analytics/metricSamples'
 import { runScenario } from './compareControllers'
 import { buildRunProvenance, type RunProvenance } from './provenance'
+import { runScenarioSampled } from './sampledRun'
 import type { Scenario } from './scenarios'
 import type { ControllerKind, RunSummary } from './TrafficEngine'
 
@@ -21,6 +23,8 @@ export interface SeedRun {
   controllerKind: ControllerKind
   provenance: RunProvenance
   summary: RunSummary
+  /** Raw metric-sample time series (M3.4); present only when sampling was requested. */
+  samples?: MetricSample[]
 }
 
 export interface ExperimentResult {
@@ -37,22 +41,28 @@ export interface ExperimentResult {
  * Run `kinds` over `scenario` for each seed in `seeds`. For a given seed every
  * controller sees the same generated demand (D-006); across seeds the demand
  * instance changes, so the seed set forms the comparison distribution.
+ *
+ * When `sampleIntervalSec` is given, each run also carries a raw metric-sample
+ * time series (M3.4). Omitting it keeps the aggregate-only shape and the summary
+ * byte-identical to the unsampled path (sampling is a read-only observer).
  */
 export function runExperiment(
   scenario: Scenario,
   seeds: readonly number[],
   kinds: readonly ControllerKind[] = ['fixed', 'maxpressure'],
+  sampleIntervalSec?: number,
 ): ExperimentResult {
   const runs: SeedRun[] = []
   for (const seed of seeds) {
     const seeded: Scenario = { ...scenario, seed }
     for (const controllerKind of kinds) {
-      runs.push({
-        seed,
-        controllerKind,
-        provenance: buildRunProvenance(seeded, controllerKind),
-        summary: runScenario(seeded, controllerKind),
-      })
+      const provenance = buildRunProvenance(seeded, controllerKind)
+      if (sampleIntervalSec === undefined) {
+        runs.push({ seed, controllerKind, provenance, summary: runScenario(seeded, controllerKind) })
+      } else {
+        const { summary, samples } = runScenarioSampled(seeded, controllerKind, sampleIntervalSec)
+        runs.push({ seed, controllerKind, provenance, summary, samples })
+      }
     }
   }
   return {

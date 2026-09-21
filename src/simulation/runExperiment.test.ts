@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_SAMPLE_INTERVAL_SEC } from './constants'
 import { CONTROLLER_IDS } from './provenance'
 import { runExperiment } from './runExperiment'
 import { BALANCED_4X4_V1 } from './scenarios'
@@ -64,5 +65,20 @@ describe('M3.3 — runExperiment (seed-set runner)', () => {
 
   it('is fully deterministic (same experiment -> identical result)', () => {
     expect(runExperiment(BALANCED_4X4_V1, SEEDS)).toEqual(result)
+  })
+
+  it('omits raw samples unless a sample interval is requested (aggregate-only default)', () => {
+    for (const r of result.runs) expect(r.samples).toBeUndefined()
+  })
+
+  it('attaches a raw metric-sample time series to every run when sampling is requested (M3.4)', () => {
+    const sampledResult = runExperiment(BALANCED_4X4_V1, SEEDS, ['fixed', 'maxpressure'], DEFAULT_SAMPLE_INTERVAL_SEC)
+    const expectedCount = BALANCED_4X4_V1.durationSec / DEFAULT_SAMPLE_INTERVAL_SEC
+    for (const r of sampledResult.runs) {
+      expect(r.samples).toHaveLength(expectedCount)
+      // Aggregate summary is unchanged by sampling: it matches the aggregate-only run.
+      const plain = result.runs.find((x) => x.seed === r.seed && x.controllerKind === r.controllerKind)!
+      expect(r.summary).toEqual(plain.summary)
+    }
   })
 })

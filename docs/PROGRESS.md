@@ -1,5 +1,47 @@
 # Progress Log
 
+## 2026-09-21 — M3.4 raw metric-sample schema (samples vs aggregate)
+
+### Session objective
+M3.4: aggregate 요약(`RunSummary`)과 **raw per-sample 시계열**을 명확히 분리한다. tick 경로/`summary()`를 바꾸지 않는 read-only 샘플링으로 구현한다(golden/m2 byte-identical).
+
+### Pre-code contract check (Phase C)
+- 새 데이터 read model(metric sample) 도입 → 코딩 전 `docs/DECISIONS.md`에 **D-011** + `docs/DATA_CONTRACTS.md` "Metric samples — M3" 기록. 기존 metric 의미 불변이라 `metricVersion` 유지(`m1-metrics-v1`).
+
+### Completed
+- `docs/DECISIONS.md` **D-011** + `docs/DATA_CONTRACTS.md` "Metric samples — M3": sample 스키마, cadence(=`TICK_SEC` 정수배), **순간 maxQueue vs aggregate run-wide maxQueue** 구분(`RunSummary.maxQueue ≥ max(sample.maxQueue)`), read-only/비침습, no metricVersion bump.
+- `src/simulation/constants.ts`: `DEFAULT_SAMPLE_INTERVAL_SEC = 30`(리포팅 cadence, `TICK_SEC` 정수배).
+- `src/analytics/metricSamples.ts`: `MetricSample`(simTimeSec, activeVehicles, completedVehicles, avgWaitSec, throughputPerHour, maxQueue). analytics가 read model 소유(ARCHITECTURE).
+- `src/simulation/TrafficEngine.ts`: read-only `sample()`(`metrics()` + `maxQueueSnapshot(vehicles)`). tick 로직/`summary()` 미변경.
+- `src/simulation/sampledRun.ts`: `runScenarioSampled(scenario, kind, sampleIntervalSec=DEFAULT)` — tick 1개씩 전진하며 cadence마다 `engine.sample()` 수집. `runScenario`와 동일 tick 시퀀스라 summary byte-identical. cadence 비정수배/비양수는 예외.
+- `src/simulation/runExperiment.ts`: 선택적 `sampleIntervalSec`. 주어지면 각 `SeedRun`에 `samples` 부착(default 미제공 시 M3.3과 동일 형태 — 기존 테스트 불변).
+- 테스트: `sampledRun.test.ts`(7) + `runExperiment.test.ts`(+2).
+
+### M3 Exit Criteria 진전
+- [x] raw samples와 aggregate 구분 — `MetricSample` 시계열 vs `RunSummary`; 테스트로 summary==unsampled·maxQueue 지배관계·JSON roundtrip 확인.
+- [x] Fixed/MaxPressure 동일 seed set 비교 — M3.3.
+- [~] run마다 config hash / metric version — provenance 포함(저장은 M3.5).
+- [ ] export 후 재분석 스키마 — M3.6/3.7 남음(단, sample/summary는 이미 JSON roundtrip 통과).
+
+### Golden/M2 보존 (핵심)
+- `sampledRun.test.ts`가 `runScenarioSampled().summary == runScenario()` 를 명시 검증 → 샘플링이 aggregate를 교란하지 않음. `npm run check` 내 goldenRun + m2Comparison 통과 유지.
+
+### Tests actually run
+- `npm run check` → PASS (23 files, **155 tests**; 이전 146 + 신규 9; session ✓ active M3, tokens ✓, build ✓).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관, source of truth는 project-status.json).
+
+### Next exact actions (M3 계속)
+1. M3.5 persistence: `src/persistence/`에서 `ExperimentResult`(provenance + summary + samples)를 Dexie로 저장/로드(reload 재현). run coordinator 경유, simulation은 Dexie 직접 호출 금지(ARCHITECTURE). runId/startedAt/codeVersion을 이 계층에서 부여(D-010). `RunRecord`/`MetricSampleRecord`(db.ts skeleton)에 매핑, 테스트에 fake-indexeddb 필요 여부 확인.
+2. M3.6 CSV export(스프레드시트 판독; samples 시계열 + summary/provenance 헤더).
+3. M3.7 JSON export/import roundtrip(메타데이터 포함, 재분석 가능 스키마 확정).
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1–M3.4 done; M3.5–M3.7 남음).
+
+---
+
 ## 2026-09-21 — M3.3 seed-set experiment runner
 
 ### Session objective

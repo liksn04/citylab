@@ -134,3 +134,20 @@ M2.3에서 이 신호를 사용한다.
 - metricVersion
 - codeVersion/commit when available
 - startedAt
+
+결정론적 core는 재현 가능한 부분(`scenarioId`, `scenarioVersion`, `controllerId`, `seed`,
+`simulationDurationSec`, `configHash`, `metricVersion`)만 만든다(`buildRunProvenance`, D-010). runtime 필드
+(`runId`, `startedAt`, `codeVersion/commit`)는 persistence/run-coordinator 계층(M3.5)이 저장 시점에 부여한다.
+`configHash`는 canonical run config(아래 Q5 입력 집합)의 결정론적 해시다.
+
+## Metric samples — M3 (D-011)
+
+aggregate 요약(`RunSummary`)과 별개로, run은 고정 cadence의 **raw per-sample 시계열**을 남길 수 있다. sample은
+그 시각의 live aggregate 신호 스냅샷이다: `{ simTimeSec, activeVehicles, completedVehicles, avgWaitSec,
+throughputPerHour, maxQueue }`. 정의는 `src/analytics/metricSamples.ts`가 소유하고, 기존 metric 정의를
+**순간에 적용**한 것이므로 새 metric 의미가 아니다(`metricVersion` 불변).
+
+- cadence는 `TICK_SEC`의 정수배(기본 `DEFAULT_SAMPLE_INTERVAL_SEC`)이며 sample이 `simTimeSec`로 자기기술한다.
+- sample의 `maxQueue`는 **그 tick의 순간 최대 단일-edge queue**(Q2), `RunSummary.maxQueue`는 **run 전체
+  최댓값**이다 → 항상 `RunSummary.maxQueue ≥ max(sample.maxQueue)`. 두 값을 혼용하지 않는다.
+- 샘플링은 read-only(`TrafficEngine.sample()`)이며 tick 로직·`summary()`·결정성에 영향이 없다.
