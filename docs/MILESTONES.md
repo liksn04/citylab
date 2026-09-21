@@ -27,7 +27,7 @@
 
 ---
 
-## M1 — Deterministic Traffic Core — ACTIVE
+## M1 — Deterministic Traffic Core — DONE
 
 ### Goal
 AI가 전혀 없어도 신뢰할 수 있고 재현 가능한 traffic simulator를 만든다.
@@ -71,21 +71,21 @@ AI가 전혀 없어도 신뢰할 수 있고 재현 가능한 traffic simulator�
 - M1.8 deterministic snapshot tests
 
 ### Exit Criteria
-- [ ] 같은 seed + config → 동일 생성 차량 sequence
-- [ ] 같은 seed + config → 동일 route sequence
-- [ ] 차량이 illegal edge를 통과하지 않음
-- [ ] red signal에서 intersection 진입 없음
-- [ ] queue metric 정의와 구현이 일치
-- [ ] waiting time metric 정의와 구현이 일치
-- [ ] 30 simulated minutes에 NaN/무한 루프/vehicle leak 없음
-- [ ] Fixed baseline 결과 fixture가 저장됨
+- [x] 같은 seed + config → 동일 생성 차량 sequence
+- [x] 같은 seed + config → 동일 route sequence
+- [x] 차량이 illegal edge를 통과하지 않음
+- [x] red signal에서 intersection 진입 없음
+- [x] queue metric 정의와 구현이 일치
+- [x] waiting time metric 정의와 구현이 일치
+- [x] 30 simulated minutes에 NaN/무한 루프/vehicle leak 없음
+- [x] Fixed baseline 결과 fixture가 저장됨
 
 ### Gate to M2
 위 8개를 모두 만족하고 `npm run check` 통과.
 
 ---
 
-## M2 — Adaptive Baseline: Max Pressure — LOCKED
+## M2 — Adaptive Baseline: Max Pressure — DONE
 
 ### Goal
 학습 없는 adaptive controller를 만들어 “AI가 아니어도 개선 가능한 기준선”을 확보한다.
@@ -102,15 +102,15 @@ AI가 전혀 없어도 신뢰할 수 있고 재현 가능한 traffic simulator�
 - UI dashboard 확장
 
 ### Exit Criteria
-- [ ] controller interface가 Fixed/MaxPressure 양쪽을 지원
-- [ ] decision interval과 min-green 계약 테스트
-- [ ] MaxPressure가 deterministic
-- [ ] balanced/rush 두 scenario에서 결과 저장 가능
-- [ ] MaxPressure가 항상 우월하다고 가정하지 않고 결과를 그대로 기록
+- [x] controller interface가 Fixed/MaxPressure 양쪽을 지원
+- [x] decision interval과 min-green 계약 테스트
+- [x] MaxPressure가 deterministic
+- [x] balanced/rush 두 scenario에서 결과 저장 가능
+- [x] MaxPressure가 항상 우월하다고 가정하지 않고 결과를 그대로 기록
 
 ---
 
-## M3 — Experiment Runner & Data Provenance — LOCKED
+## M3 — Experiment Runner & Data Provenance — DONE
 
 ### Goal
 공정한 비교를 자동화한다.
@@ -124,15 +124,15 @@ AI가 전혀 없어도 신뢰할 수 있고 재현 가능한 traffic simulator�
 - CSV/JSON export
 
 ### Exit Criteria
-- [ ] Fixed/MaxPressure 동일 seed set 비교
-- [ ] run마다 config hash 저장
-- [ ] metric definition version 저장
-- [ ] raw samples와 aggregate 구분
-- [ ] export 후 재분석 가능한 스키마
+- [x] Fixed/MaxPressure 동일 seed set 비교
+- [x] run마다 config hash 저장
+- [x] metric definition version 저장
+- [x] raw samples와 aggregate 구분
+- [x] export 후 재분석 가능한 스키마
 
 ---
 
-## M4 — Shared DQN Training — LOCKED
+## M4 — Shared DQN Training — ACTIVE
 
 ### Goal
 실제로 학습하는 shared policy를 붙인다.

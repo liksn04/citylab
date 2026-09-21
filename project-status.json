@@ -1,14 +1,14 @@
 {
   "project": "Neural City Lab",
   "version": "0.1.0",
-  "activeMilestone": "M3",
-  "activeMilestoneTitle": "Experiment Runner & Data Provenance",
+  "activeMilestone": "M4",
+  "activeMilestoneTitle": "Shared DQN Training",
   "milestoneStatus": {
     "M0": "done",
     "M1": "done",
     "M2": "done",
-    "M3": "active",
-    "M4": "locked",
+    "M3": "done",
+    "M4": "active",
     "M5": "locked",
     "M6": "locked"
   },
@@ -27,7 +27,12 @@
     "M2_maxPressureDeterministic": true,
     "M2_scenarioResultsSaved": true,
     "M2_noSuperiorityAssumption": true,
-    "M2_goldenBaselinePreserved": true
+    "M2_goldenBaselinePreserved": true,
+    "M3_seedSetComparison": true,
+    "M3_configHashPersisted": true,
+    "M3_metricVersionPersisted": true,
+    "M3_rawVsAggregateSeparated": true,
+    "M3_reanalyzableExport": true
   },
   "lockedUntil": {
     "maxPressure": "M2",
@@ -40,14 +45,15 @@
     "accounts": "post-MVP"
   },
   "lastSession": {
-    "date": "2026-09-20",
-    "summary": "M2 COMPLETE. M2.5/M2.6: added RUSH_4X4_V1 (2400 vph, seed 73019) and a SCENARIOS list; compareControllers() runs Fixed and MaxPressure on a scenario under identical demand (D-006); saved src/simulation/__fixtures__/m2-comparison-v1.json from real runs and locked it with m2Comparison.test.ts. Measured (recorded as-is, no superiority assumed) — balanced: Fixed avgWait 12.45/p95 37.5/sw 1248 vs MaxPressure 3.15/11/514; rush: Fixed 13.89/39.5/1248 vs MaxPressure 4.75/15.5/1037; MaxPressure improved both here but that is not assumed to generalize. All six M2 exit criteria have evidence and npm run check passes (122 tests + build); the Fixed golden baseline stayed byte-identical throughout the M2.3 engine rewire. Advanced project-status: M2 done, M3 active (M3 not implemented this session).",
+    "date": "2026-09-21",
+    "summary": "M3 COMPLETE — advanced to M4 active (no M4 code this session). M3.7: D-014; src/runner/experimentJson.ts (exportExperimentJson/parseExperimentExport/importExperimentBundle) wraps an ExperimentBundle in a versioned envelope (format 'neural-city-lab/experiment' + schemaVersion 1 + exportedAt); import validates format/version/shape; lossless roundtrip; golden m3-export-v1.json. All 5 M3 exit criteria have evidence: (1) seed-set Fixed/MaxPressure comparison = runExperiment + D-006 test; (2) config hash per run = RunProvenance.configHash persisted+reloaded; (3) metric version stored = RunRecord.metricVersion persisted+roundtripped; (4) raw samples vs aggregate = MetricSample vs RunSummary, separate tables + CSV tables; (5) re-analyzable export = CSV (M3.6) + JSON roundtrip (M3.7). npm run check PASS (27 files, 182 tests, build ok). goldenRun + m2Comparison still pass; summary()/metricVersion/simulation unchanged throughout M3. Advanced per AI_AGENT_GUIDE Milestone advancement protocol: M3 done, M4 active, M3 gates recorded. DQN/TensorFlow.js training NOT implemented (M4 work for next session).",
     "nextActions": [
-      "M3.1: add a versioned scenario schema (scenarioVersion) on top of src/simulation/scenarios.ts; extend the comparison record with provenance.",
-      "M3.2: canonicalize run config and hash it (same config -> same hash); design a provenance wrapper carrying controllerId + scenarioVersion + configHash + metricVersion (keep summary() shape — the golden fixture locks it).",
-      "M3.3-M3.7: seed-set runner sharing identical demand across controllers, metric sample schema, Dexie/IndexedDB persistence (reload after refresh), CSV + JSON export/import.",
-      "Record M3 provenance/schema decisions in docs/DECISIONS.md before coding them.",
-      "Doc hygiene (out of milestone scope): sync docs/MILESTONES.md status labels and the UI 'M1 active' copy with project-status.json."
+      "M4 architecture lock (MILESTONES M4): shared policy network + per-intersection observation (NOT one model per intersection, D-002); actions HOLD|SWITCH only; safety phase transitions env-enforced (applySignalIntent) — agent never picks yellow.",
+      "M4.1: observation encoder/normalizer (src/rl/ or controllers/) turning per-intersection state into the shared observation vector; boundary/normalization tests. No training yet.",
+      "M4.2: action adapter mapping HOLD|SWITCH through the existing Controller contract; keep min-green/yellow environment-owned (reuse signalMachine).",
+      "Record M4 architecture/observation-encoding decisions in docs/DECISIONS.md before coding (Phase C). Then M4.3+ replay buffer, target network, epsilon schedule, Web Worker training, model save/load, evaluation with train/eval seed separation.",
+      "Doc hygiene (out of milestone scope): sync docs/MILESTONES.md status labels (still show M1 ACTIVE/M2 LOCKED/M3 LOCKED) and the UI 'M1 active' copy with project-status.json (now M4 active).",
+      "M6.6 owns persistence migration tests across Dexie versions (v1->v2); no shipped data yet."
     ]
   }
 }

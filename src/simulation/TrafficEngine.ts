@@ -1,6 +1,7 @@
 import type { Controller, ObservationInput } from '../controllers/Controller'
 import { FixedTimeController, type FixedControllerConfig } from '../controllers/FixedTimeController'
 import { MaxPressureController } from '../controllers/MaxPressureController'
+import type { MetricSample } from '../analytics/metricSamples'
 import { avgWaitingTimeSec, maxQueueSnapshot, p95WaitingTimeSec, queueLengthsByEdge } from '../analytics/metrics'
 import { METRIC_VERSION, MIN_GREEN_SEC, TICK_SEC, VEHICLE_GAP_M, YELLOW_SEC } from './constants'
 import { generateDemand, type Trip } from './demand'
@@ -327,6 +328,23 @@ export class TrafficEngine {
       completedVehicles: completed,
       avgWaitSec: avgWaitingTimeSec(this.completedWaits),
       throughputPerHour: hours > 0 ? completed / hours : 0,
+    }
+  }
+
+  /**
+   * Read-only raw metric sample of the current instant (M3.4, D-011). Reuses the
+   * live aggregates plus the instantaneous max single-edge queue. Never mutates
+   * state or the tick path — collecting samples cannot change simulation output.
+   */
+  sample(): MetricSample {
+    const live = this.metrics()
+    return {
+      simTimeSec: live.simTimeSec,
+      activeVehicles: live.activeVehicles,
+      completedVehicles: live.completedVehicles,
+      avgWaitSec: live.avgWaitSec,
+      throughputPerHour: live.throughputPerHour,
+      maxQueue: maxQueueSnapshot(this.vehicles),
     }
   }
 

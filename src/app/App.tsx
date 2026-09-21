@@ -17,7 +17,7 @@ export function App() {
               <div className="eyebrow">{activeView.toUpperCase()}</div>
               <h1>4×4 city / fixed baseline</h1>
             </div>
-            <div className="stage-note">M1 active · learning locked</div>
+            <div className="stage-note">M4 active · training not built yet</div>
           </div>
           <CityCanvas />
         </section>

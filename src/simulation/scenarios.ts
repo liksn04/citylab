@@ -1,7 +1,16 @@
 import type { EngineConfig } from './TrafficEngine'
 
-/** A named, versioned experiment scenario. `controllerId` records the baseline it was locked against. */
-export type Scenario = EngineConfig & { id: string; controllerId: string }
+/**
+ * A named, versioned experiment scenario. `id` is the stable scenario key used
+ * in saved comparisons; `scenarioVersion` (M3.1, D-010) is bumped whenever a
+ * scenario's demand meaning changes, so historical runs are not silently
+ * reinterpreted. `controllerId` records the baseline it was locked against.
+ */
+export type Scenario = EngineConfig & {
+  id: string
+  scenarioVersion: string
+  controllerId: string
+}
 
 /**
  * Balanced 4×4 reference scenario (M1 golden baseline, D-006 common random
@@ -11,6 +20,7 @@ export type Scenario = EngineConfig & { id: string; controllerId: string }
  */
 export const BALANCED_4X4_V1: Scenario = {
   id: 'balanced-4x4-v1',
+  scenarioVersion: 'v1',
   controllerId: 'fixed-v1',
   rows: 4,
   cols: 4,
@@ -27,6 +37,7 @@ export const BALANCED_4X4_V1: Scenario = {
  */
 export const RUSH_4X4_V1: Scenario = {
   id: 'rush-4x4-v1',
+  scenarioVersion: 'v1',
   controllerId: 'fixed-v1',
   rows: 4,
   cols: 4,

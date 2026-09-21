@@ -1,0 +1,7 @@
+experimentId,runId,controllerId,seed,simTimeSec,activeVehicles,completedVehicles,avgWaitSec,throughputPerHour,maxQueue
+exp-csv-1,exp-csv-1--fixed-v1--seed41021,fixed-v1,41021,600,13,186,12.771505376344086,1116,0
+exp-csv-1,exp-csv-1--fixed-v1--seed41021,fixed-v1,41021,1200,15,384,12.645833333333334,1152,2
+exp-csv-1,exp-csv-1--fixed-v1--seed41021,fixed-v1,41021,1800,14,585,12.446153846153846,1170,1
+exp-csv-1,exp-csv-1--maxpressure-v1--seed41021,maxpressure-v1,41021,600,7,192,3.2057291666666665,1152,1
+exp-csv-1,exp-csv-1--maxpressure-v1--seed41021,maxpressure-v1,41021,1200,9,390,3.123076923076923,1170,0
+exp-csv-1,exp-csv-1--maxpressure-v1--seed41021,maxpressure-v1,41021,1800,6,593,3.1534569983136596,1186,0

@@ -36,10 +36,10 @@ AI 에이전트든 사람이든 작업 시작 전에 아래 순서로 읽습니�
 
 ## 현재 상태
 
-- 현재 활성 마일스톤: **M1 — Deterministic Traffic Core**
-- M0는 완료됨.
-- DQN, TensorFlow.js 학습, Web Worker 학습 루프는 **M4 이전 구현 금지**.
-- Analytics는 M5 이전 “실험 결과를 꾸며서 보여주는 것”을 금지하고, 실제 수집 데이터만 사용.
+- 현재 활성 마일스톤: **M4 — Shared DQN Training**
+- M0–M3는 완료됨(deterministic core, MaxPressure baseline, experiment runner/provenance/persistence/export).
+- DQN, TensorFlow.js 학습, Web Worker 학습 루프는 M4에서 구현한다. 단 M4 아키텍처 lock을 따른다(shared network + per-intersection observation, action `HOLD|SWITCH`, safety는 환경이 강제).
+- Analytics dashboard는 **M5 이전 확장 금지**이며, 모든 시각화는 실제 수집 데이터만 사용.
 
 `npm run session:open`은 현재 마일스톤과 허용 작업을 출력합니다.
 

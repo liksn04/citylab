@@ -1,5 +1,257 @@
 # Progress Log
 
+## 2026-09-21 — M3.7 JSON export/import + M3 COMPLETE (advanced to M4 active)
+
+### Session objective
+M3.7: 실험을 버전 태그가 붙은 JSON 봉투로 export/import(무손실 roundtrip)한다. 그 후 M3 exit criteria 5개를 재평가해 충족 시 milestone을 전진시킨다.
+
+### Pre-code contract check (Phase C)
+- JSON export 봉투 스키마(format/schemaVersion + 검증)는 재분석/상호운용 스키마 → 코딩 전 `docs/DECISIONS.md`에 **D-014** 기록. 순수 직렬화라 metric/`summary()`/simulation 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-014**: 버전 봉투(`format:'neural-city-lab/experiment'` + `schemaVersion:1` + `exportedAt`)로 `ExperimentBundle` 감쌈. import 시 format/version/shape 검증.
+- `src/runner/experimentJson.ts`: `exportExperimentJson`(pretty JSON), `parseExperimentExport`(JSON/format/version/shape 검증, 명확한 에러), `importExperimentBundle`(→ `ExperimentBundle`, 그대로 저장 가능). `experimentToRecords`/`recordsToExperiment`(D-012)와 정합.
+- `src/runner/__fixtures__/m3-export-v1.json`: **실제 run**에서 생성한 golden(configHash·summary가 m3-provenance/golden과 정합).
+- 테스트: `experimentJson.test.ts`(9) — fixture 재현, 봉투 필드, 무손실 roundtrip, 재분석 뷰 보존, pretty JSON, 검증 에러 4종(bad JSON/format/version/shape).
+
+### M3 Exit Criteria — evidence (gate)
+- [x] Fixed/MaxPressure 동일 seed set 비교 — `runExperiment`(M3.3) + `runExperiment.test.ts`(D-006: seed 내 controller 동일 demand).
+- [x] run마다 config hash 저장 — `RunProvenance.configHash`(`hashRunConfig`, M3.2) → `RunRecord.configHash` persist; `dexieRunStore.test.ts` reload 후 재조회, `experimentPersistence.test.ts` 매핑.
+- [x] metric definition version 저장 — `RunRecord.metricVersion` persist + reload/JSON roundtrip.
+- [x] raw samples와 aggregate 구분 — `MetricSample`(M3.4) vs `RunSummary`; 저장 분리(metricSamples vs runs 테이블) + CSV 두 테이블(M3.6); `sampledRun.test.ts`(summary==unsampled, aggregate maxQueue ≥ sample max).
+- [x] export 후 재분석 가능한 스키마 — CSV(M3.6, tidy 2-table golden) + JSON export/import 무손실 roundtrip(M3.7, 버전 봉투 + 검증).
+
+### Milestone advancement (AI_AGENT_GUIDE protocol)
+- 5개 exit criteria 전부 test/evidence 존재 + `npm run check` 통과 → `project-status.json`: **M3 `done`, M4 `active`**로 전진, M3 gate 5개 기록. 사유/날짜(2026-09-21) 본 항목에 기록.
+- **M4 코드(DQN/TensorFlow.js/replay/worker)는 이번 세션에서 구현하지 않음** — 잠금 해제만. M4 아키텍처 lock 준수 예정: shared network + per-intersection observation(D-002), action HOLD|SWITCH, safety는 환경 강제(`applySignalIntent`).
+
+### Golden/M2 보존 (M3 전 구간)
+- `summary()`/`metricVersion`/simulation 코드 M3 내내 무변경. `npm run check` 내 goldenRun + m2Comparison 계속 통과.
+
+### Tests actually run
+- `npm run check` → PASS (27 files, **182 tests**; 이전 173 + 신규 9; session ✓, tokens ✓, build ✓).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨(M1 ACTIVE/M2 LOCKED/M3 LOCKED)과 UI 상단 "M1 active" 카피가 이제 project-status(M4 active)와 크게 어긋남 — 코드 무관 별도 문서 동기화 slice 권장(source of truth는 `project-status.json`).
+
+### Next exact actions (M4 — Shared DQN Training)
+1. M4 시작 전 아키텍처/관측 인코딩 결정을 `docs/DECISIONS.md`에 기록(Phase C). shared network + per-intersection observation, action HOLD|SWITCH, env-enforced safety 재확인.
+2. M4.1 observation encoder/normalizer(경계/정규화 테스트). 학습 코드 없음.
+3. M4.2 action adapter(기존 `Controller` 계약 재사용, min-green/yellow는 `signalMachine`가 강제).
+4. 이후 M4.3+ replay buffer / target network / epsilon schedule / Web Worker training / model save·load / evaluation(train·eval seed 분리).
+
+### Active milestone
+M4 — Shared DQN Training (M3 done).
+
+---
+
+## 2026-09-21 — M3.6 CSV export (spreadsheet-readable runs + samples tables)
+
+### Session objective
+M3.6: `PersistedExperiment`를 스프레드시트에서 바로 읽고 재분석 가능한 tidy CSV 두 개(runs aggregate / samples 시계열)로 내보낸다. 순수 함수 + golden fixture. metric 의미/`summary()` 불변.
+
+### Pre-code contract check (Phase C)
+- export 열 계약은 재분석 스키마(M3 exit) → 코딩 전 `docs/DECISIONS.md`에 **D-013** 기록. 순수 직렬화라 metric/`metricVersion`/simulation 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-013**: runs table(provenance + 전체 `RunSummary`, run당 1행) + samples table(raw 시계열, (run,sample)당 1행, run 정체성 비정규화), RFC 4180 quoting + CRLF + full-precision 숫자. `PersistedRun`에 `runId` 추가 명시.
+- `src/runner/experimentPersistence.ts`: `PersistedRun.runId`(저장된 `RunRecord.id`) 추가, `recordsToExperiment`가 채움. provenance/summary/samples 의미 불변(M3.5 테스트 그대로 통과).
+- `src/runner/experimentCsv.ts`: `experimentToCsv → { runsCsv, samplesCsv }` + `runsToCsv`/`samplesToCsv` + RFC 4180 `escapeField`(콤마/따옴표/개행 시 큰따옴표·내부 따옴표 이중화, CRLF, 헤더 행).
+- `src/runner/__fixtures__/m3-runs-v1.csv`, `m3-samples-v1.csv`: **실제 run→persist→reconstruct**에서 생성한 golden(하드코딩 아님). configHash가 m3-provenance fixture와 일치, 최종 누적 sample avgWait == aggregate avgWait로 정합.
+- 테스트: `experimentCsv.test.ts`(8) — fixture 재현, 정확한 헤더, CRLF, 행 수, 콤마/따옴표 escaping, full-precision, samples 없는 경우 헤더-only.
+
+### Build/infra 메모 (M3.6 테스트 지원, 최소 변경)
+- golden CSV를 fs로 읽는 테스트가 `node:fs`를 쓰는데 TS 7 네이티브 컴파일러가 `@types/*`를 자동 포함하지 않아 tsc 실패. `@types/node@20`(devDep) 추가 + `tsconfig.app.json`에 `"types": ["node", "vite/client"]` 명시로 해결. src(런타임) 코드 변경 없음.
+
+### M3 Exit Criteria 진전
+- [x] 동일 seed set 비교(M3.3) · [x] raw samples vs aggregate 구분(M3.4/M3.5) · [x] config hash / metric version 저장(M3.5).
+- [~] export 후 재분석 가능한 스키마 — CSV(runs/samples) 완료; JSON export/import roundtrip은 M3.7.
+
+### Golden/M2 보존
+- `summary()`/`metricVersion`/simulation 무변경. `npm run check` 내 goldenRun + m2Comparison + M3.1~M3.5 테스트 전부 통과.
+
+### Tests actually run
+- `npm run check` → PASS (26 files, **173 tests**; 이전 165 + 신규 8; session ✓ active M3, tokens ✓, build ✓).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관).
+
+### Next exact actions (M3 마무리)
+1. M3.7 JSON export/import roundtrip: `PersistedExperiment`(또는 `ExperimentBundle`)를 메타데이터(스키마/버전 포함) JSON으로 내보내고, import 시 스키마/버전 검증 후 재구성. `experimentToRecords`/`recordsToExperiment`와 정합, in-memory roundtrip 테스트 + golden.
+2. M3.7 완료 후 **M3 exit criteria 5개 전부 재평가** → 충족 시 AI_AGENT_GUIDE Milestone advancement protocol로 project-status를 M3 done, M4 active로 전진(단 DQN/TFJS는 M4 잠금 유지, 실제 학습 코드는 다음 세션).
+3. (범위 밖) 문서/카피 동기화 별도 slice.
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1–M3.6 done; M3.7 남음).
+
+---
+
+## 2026-09-21 — M3.5 experiment/run persistence (Dexie + coordinator + reload roundtrip)
+
+### Session objective
+M3.5: `ExperimentResult`(provenance + summary + samples)를 Dexie로 저장/로드한다. ARCHITECTURE 의존 방향을 지켜 simulation은 Dexie를 모르게 하고, coordinator가 persistence↔simulation을 잇는다. reload 후 재현을 fake-indexeddb로 증명한다.
+
+### Pre-code contract check (Phase C)
+- persistence 스키마 확장 + 아키텍처(포트/코디네이터) 결정 → 코딩 전 `docs/DECISIONS.md`에 **D-012** 기록. metric 의미/`summary()`/simulation 궤적 불변(순수 저장/로드).
+
+### Completed
+- `docs/DECISIONS.md` **D-012**: `RunStore` 포트 + `DexieRunStore`/`InMemoryRunStore` 어댑터 + coordinator(`src/runner`), Dexie `version(2)`(RunRecord에 provenance 전체 + runtime `startedAt`/`codeVersion`, `controllerType`→`controllerId`; `MetricSampleRecord`=full `MetricSample`), runtime 필드는 coordinator가 부여, fake-indexeddb devDep, migration은 M6 유예.
+- `src/persistence/db.ts`: 확장된 레코드 타입 + `RunSummaryRecord`(structural, persistence가 simulation을 import하지 않도록) + `ExperimentBundle` + `RunStore` 인터페이스 + Dexie `version(2)` + `DexieRunStore`(트랜잭션 저장/조회, getRuns는 runId 정렬로 storage-독립 결정성) + `InMemoryRunStore`(테스트/폴백).
+- `src/runner/experimentPersistence.ts`: `experimentToRecords`/`recordsToExperiment`(순수 매핑) + `saveExperiment`/`loadExperiment`(coordinator). runId/startedAt/codeVersion/createdAt는 `RuntimeMeta`로 주입(runId 기본 `<expId>--<controllerId>--seed<seed>`). **simulation은 이 모듈을 import하지 않음**(금지된 simulation→Dexie 방지).
+- 테스트: `experimentPersistence.test.ts`(8 — 매핑 정체성/runtime 필드/유일 runId/sample flatten·regroup/주입 runId/역매핑 roundtrip/in-memory save·load/list·getRuns·getSamples), `dexieRunStore.test.ts`(2 — fake-indexeddb로 저장→새 연결 재오픈→동일 재구성, raw 레코드 개수/샘플 시계열 확인).
+
+### M3 Exit Criteria 진전
+- [x] Fixed/MaxPressure 동일 seed set 비교 — M3.3.
+- [x] raw samples와 aggregate 구분 — M3.4 + 저장 스키마에서 runs(aggregate)와 metricSamples(raw) 분리.
+- [x] run마다 config hash / metric version 저장 — `RunRecord.configHash`/`metricVersion` persist + reload 확인.
+- [x] export 후 재분석 가능한 스키마(부분) — `recordsToExperiment`가 provenance+summary+samples 재구성; Dexie reload roundtrip 통과. 명시적 CSV/JSON export는 M3.6/3.7.
+
+### Golden/M2 보존
+- `summary()`/`metricVersion`/simulation 코드 무변경. `npm run check` 내 goldenRun + m2Comparison 통과 유지.
+
+### Tests actually run
+- `npm run check` → PASS (25 files, **165 tests**; 이전 155 + 신규 10; session ✓ active M3, tokens ✓, build ✓).
+- devDependency 추가: `fake-indexeddb@6.2.5`(테스트 전용, IndexedDB 없는 node에서 Dexie roundtrip 검증).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관, source of truth는 project-status.json).
+- persistence migration 테스트(version 간)는 M6.6 소관 — 현재 저장 데이터 없어 `version(2)` 정의만.
+
+### Next exact actions (M3 마무리)
+1. M3.6 CSV export: `PersistedExperiment`/`ExperimentResult`에서 sample 시계열 + summary/provenance 헤더를 스프레드시트 판독 가능한 CSV로. 순수 함수 + fixture 테스트.
+2. M3.7 JSON export/import roundtrip: 메타데이터 포함 재분석 스키마 확정(가져오기 시 스키마/버전 검증). `experimentToRecords`/`recordsToExperiment`와 정합.
+3. (선택) app store/UI에서 run 저장을 트리거하는 배선은 M5(analytics)에서 provenance inspector와 함께.
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1–M3.5 done; M3.6/M3.7 남음).
+
+---
+
+## 2026-09-21 — M3.4 raw metric-sample schema (samples vs aggregate)
+
+### Session objective
+M3.4: aggregate 요약(`RunSummary`)과 **raw per-sample 시계열**을 명확히 분리한다. tick 경로/`summary()`를 바꾸지 않는 read-only 샘플링으로 구현한다(golden/m2 byte-identical).
+
+### Pre-code contract check (Phase C)
+- 새 데이터 read model(metric sample) 도입 → 코딩 전 `docs/DECISIONS.md`에 **D-011** + `docs/DATA_CONTRACTS.md` "Metric samples — M3" 기록. 기존 metric 의미 불변이라 `metricVersion` 유지(`m1-metrics-v1`).
+
+### Completed
+- `docs/DECISIONS.md` **D-011** + `docs/DATA_CONTRACTS.md` "Metric samples — M3": sample 스키마, cadence(=`TICK_SEC` 정수배), **순간 maxQueue vs aggregate run-wide maxQueue** 구분(`RunSummary.maxQueue ≥ max(sample.maxQueue)`), read-only/비침습, no metricVersion bump.
+- `src/simulation/constants.ts`: `DEFAULT_SAMPLE_INTERVAL_SEC = 30`(리포팅 cadence, `TICK_SEC` 정수배).
+- `src/analytics/metricSamples.ts`: `MetricSample`(simTimeSec, activeVehicles, completedVehicles, avgWaitSec, throughputPerHour, maxQueue). analytics가 read model 소유(ARCHITECTURE).
+- `src/simulation/TrafficEngine.ts`: read-only `sample()`(`metrics()` + `maxQueueSnapshot(vehicles)`). tick 로직/`summary()` 미변경.
+- `src/simulation/sampledRun.ts`: `runScenarioSampled(scenario, kind, sampleIntervalSec=DEFAULT)` — tick 1개씩 전진하며 cadence마다 `engine.sample()` 수집. `runScenario`와 동일 tick 시퀀스라 summary byte-identical. cadence 비정수배/비양수는 예외.
+- `src/simulation/runExperiment.ts`: 선택적 `sampleIntervalSec`. 주어지면 각 `SeedRun`에 `samples` 부착(default 미제공 시 M3.3과 동일 형태 — 기존 테스트 불변).
+- 테스트: `sampledRun.test.ts`(7) + `runExperiment.test.ts`(+2).
+
+### M3 Exit Criteria 진전
+- [x] raw samples와 aggregate 구분 — `MetricSample` 시계열 vs `RunSummary`; 테스트로 summary==unsampled·maxQueue 지배관계·JSON roundtrip 확인.
+- [x] Fixed/MaxPressure 동일 seed set 비교 — M3.3.
+- [~] run마다 config hash / metric version — provenance 포함(저장은 M3.5).
+- [ ] export 후 재분석 스키마 — M3.6/3.7 남음(단, sample/summary는 이미 JSON roundtrip 통과).
+
+### Golden/M2 보존 (핵심)
+- `sampledRun.test.ts`가 `runScenarioSampled().summary == runScenario()` 를 명시 검증 → 샘플링이 aggregate를 교란하지 않음. `npm run check` 내 goldenRun + m2Comparison 통과 유지.
+
+### Tests actually run
+- `npm run check` → PASS (23 files, **155 tests**; 이전 146 + 신규 9; session ✓ active M3, tokens ✓, build ✓).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관, source of truth는 project-status.json).
+
+### Next exact actions (M3 계속)
+1. M3.5 persistence: `src/persistence/`에서 `ExperimentResult`(provenance + summary + samples)를 Dexie로 저장/로드(reload 재현). run coordinator 경유, simulation은 Dexie 직접 호출 금지(ARCHITECTURE). runId/startedAt/codeVersion을 이 계층에서 부여(D-010). `RunRecord`/`MetricSampleRecord`(db.ts skeleton)에 매핑, 테스트에 fake-indexeddb 필요 여부 확인.
+2. M3.6 CSV export(스프레드시트 판독; samples 시계열 + summary/provenance 헤더).
+3. M3.7 JSON export/import roundtrip(메타데이터 포함, 재분석 가능 스키마 확정).
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1–M3.4 done; M3.5–M3.7 남음).
+
+---
+
+## 2026-09-21 — M3.3 seed-set experiment runner
+
+### Session objective
+M3.3: scenario를 seed set 전체에 대해 실행하고, seed마다 두 controller가 동일 demand를 공유하며(D-006), 각 run에 `RunProvenance`(M3.2)를 부착하는 seed-set runner를 순수 도메인으로 구현한다.
+
+### Pre-code contract check (Phase C)
+- 데이터 의미/아키텍처 변경 없음: `runScenario`(M2.5)와 `buildRunProvenance`(M3.2) 재사용. `summary()`/`METRIC_VERSION`/golden·m2 fixture 불변. 신규 결정 없음(D-006/D-010 범위 내).
+
+### Completed
+- `src/simulation/runExperiment.ts`: `SeedRun`(seed, controllerKind, provenance, summary), `ExperimentResult`(scenarioId, scenarioVersion, seeds, controllers, runs), `runExperiment(scenario, seeds, kinds=['fixed','maxpressure'])`. seed마다 `{...scenario, seed}`로 각 controller를 돌려 seed-major로 수집. 우월 판단 없음(R2). runtime provenance 필드(runId/startedAt)는 부착 안 함 — persistence(M3.5)에서 부여(D-010).
+- `src/simulation/runExperiment.test.ts`: 7 테스트 — seed-major run 순서, **D-006**(seed 내 controller 간 `generated` 동일), seed 간 demand 인스턴스 변화(카운트는 rate 기반 seed-무관이라 avgWait 차이로 확인), provenance 부착(seed/controllerId/scenario/hash), (seed,controller)별 configHash 유일, 완전 결정성.
+
+### M3 Exit Criteria 진전
+- [x] Fixed/MaxPressure 동일 seed set 비교 — `runExperiment`가 동일 seed set에서 두 controller를 동일 demand로 실행(D-006 테스트).
+- [~] run마다 config hash / metric version — 각 `SeedRun.provenance`에 configHash·metricVersion 포함(저장은 M3.5).
+- [ ] raw samples vs aggregate 구분 — M3.4 남음(현재 aggregate `RunSummary`만).
+- [ ] export 스키마 — M3.6/3.7 남음.
+
+### Golden/M2 보존
+- `npm run check` 내 goldenRun + m2Comparison 통과 유지 → 기존 fixture byte-identical.
+
+### Tests actually run
+- `npm run check` → PASS (22 files, **146 tests**; 이전 139 + 신규 7; session ✓ active M3, tokens ✓, build ✓). seed-set 테스트의 12회 풀런(3 seed × 2 controller × 1800s + 결정성 재실행)도 ~0.4s.
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관, source of truth는 project-status.json).
+
+### Next exact actions (M3 계속)
+1. M3.4 metric sample schema: aggregate(`RunSummary`)와 raw per-sample time series를 분리. TrafficEngine tick 경로를 바꾸지 않는 non-invasive 샘플링 훅(예: 러너가 tick 스텝 사이에 `engine.metrics()` + 스냅샷 maxQueue 수집) 설계. 샘플 cadence는 결정에 남길지 검토(DECISIONS). 인메모리 roundtrip 테스트.
+2. M3.5 persistence: `src/persistence/`에서 `ExperimentResult`(provenance+summary+samples)를 Dexie로 저장/로드(reload 재현). run coordinator 경유, simulation은 Dexie 직접 호출 금지(ARCHITECTURE). runId/startedAt/codeVersion을 이 계층에서 부여(D-010). 테스트에 fake-indexeddb 필요 여부 확인.
+3. M3.6/M3.7 CSV(스프레드시트 판독) + JSON export/import roundtrip.
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1/M3.2/M3.3 done; M3.4–M3.7 남음).
+
+---
+
+## 2026-09-21 — M3.1/M3.2 provenance foundation (versioned scenario schema + config hash)
+
+### Session objective
+M3.1+M3.2: versioned scenario schema(`scenarioVersion`) + 결정론적 run-config canonicalization/hash를 **별도 provenance 래퍼**로 구현한다. `summary()` 형태·`METRIC_VERSION`·golden/m2 fixture는 byte-identical로 보존한다. 코딩 전 결정을 `DECISIONS.md`에 먼저 기록한다(Phase C).
+
+### Pre-code contract check (Phase C)
+- provenance 스키마 + config canonicalization/hash는 아키텍처/데이터 정체성 결정 → 코딩 전에 `docs/DECISIONS.md`에 **D-010** 기록.
+- 보고 metric/`metricVersion`/`summary()` 형태 변경 없음(provenance는 순수 파생 메타데이터, 시뮬레이션 궤적 무영향).
+
+### Completed
+- `docs/DECISIONS.md` **D-010**: `RunConfig` 정규 필드 집합(DATA_CONTRACTS Q5 = 재현 결정 입력), stable key-sorted JSON + 순수 FNV계열 2-lane 해시, `RunProvenance` 래퍼를 `summary()`와 분리, runtime 필드(runId/startedAt/commit)는 persistence 계층(M3.5)로 유예. 대안 4개 + determinism/metric impact 기록.
+- `src/simulation/scenarios.ts`: `Scenario`에 `scenarioVersion: 'v1'` **추가**(기존 `id` 불변). M1.1 M2 산출물에 영향 없음.
+- `src/simulation/runConfig.ts`: `canonicalizeRunConfig`(controller별 유효 timing 해석 — fixed는 greenSec/yellowSec 기본값 채움·minGreen 0, maxpressure는 greenSec null·yellow/minGreen 상수), `stableStringify`(재귀 key 정렬), `hashString`(2-lane 32bit→16hex), `hashRunConfig`(`m3-`+16hex).
+- `src/simulation/provenance.ts`: `RunProvenance` 타입 + `CONTROLLER_IDS`(fixed→fixed-v1, maxpressure→maxpressure-v1) + `buildRunProvenance(scenario, kind)` — sim 실행 없이 순수 파생.
+- `src/simulation/__fixtures__/m3-provenance-v1.json`: **실제 `buildRunProvenance` 출력**에서 생성(하드코딩 아님). balanced/rush × fixed/maxpressure = 4개, 모두 서로 다른 configHash.
+- 테스트: `runConfig.test.ts`(key 순서 무관·기본값 생략 vs 명시 동일 hash·필드별 hash 분리·maxpressure timing 무시), `provenance.test.ts`(fixture 재현·정체성 필드·controllerId 매핑·D-006 동일 seed/상이 hash).
+
+### M3 Exit Criteria 진전 (부분)
+- [~] run마다 config hash — `hashRunConfig`로 결정론적 configHash 산출 가능(저장은 M3.5 persistence에서 결합).
+- [~] metric definition version 저장 — `RunProvenance.metricVersion` 포함(스키마 확정).
+- [ ] Fixed/MaxPressure 동일 seed set 비교 — M3.3(seed-set runner) 남음.
+- [ ] raw samples vs aggregate 구분 — M3.4 + persistence 남음.
+- [ ] export 후 재분석 스키마 — M3.6/3.7 남음.
+
+### Golden/M2 보존 가드 (핵심)
+- `goldenRun.test.ts` + `m2Comparison.test.ts` = 9/9 PASS → Fixed golden baseline과 m2-comparison fixture가 `scenarioVersion` 추가 후에도 byte-identical. `summary()`/`METRIC_VERSION` 미변경.
+
+### Tests actually run
+- `npm run check` → PASS (21 files, **139 tests**; 이전 122 + 신규 17; session ✓ active M3, tokens ✓, build ✓ tsc+vite).
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨(M1 ACTIVE/M2 LOCKED/M3 LOCKED)과 UI 상단 "M1 active" 카피가 여전히 stale. source of truth는 `project-status.json`(M3 active). 문서/카피 동기화는 코드 무관 별도 slice.
+- persistence `src/persistence/db.ts`의 `RunRecord`는 이미 configHash/metricVersion/scenarioId 필드를 가짐(M0 skeleton). M3.5에서 `buildRunProvenance` 출력을 이 레코드로 매핑.
+
+### Next exact actions (M3 계속)
+1. M3.3 `src/simulation/` seed-set runner: scenario별 seed set을 공유해 Fixed/MaxPressure를 동일 demand로 배치 실행하고 각 run에 `buildRunProvenance` 부착. `compareControllers`는 M2 fixture 때문에 형태 고정 → 신규 함수로 확장(예: `runExperiment`).
+2. M3.4 metric sample schema: aggregate(`RunSummary`)와 raw per-sample(`MetricSampleRecord`)를 명확히 분리. 엔진에서 주기적 sample 추출 훅 설계(summary 형태 불변 유지).
+3. M3.5 persistence: `src/persistence/`에서 `RunProvenance`+summary+samples를 Dexie로 저장/로드(reload 후 재현). simulation은 Dexie 직접 호출 금지(run coordinator 경유, ARCHITECTURE).
+4. M3.6/M3.7 CSV(스프레드시트 판독) + JSON export/import(roundtrip, metadata 포함).
+5. runtime provenance 필드(runId/startedAt/codeVersion)는 persistence 계층에서 부여(D-010).
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1/M3.2 done, M3.3–M3.7 남음).
+
+---
+
 ## 2026-09-20 — M2.5/M2.6 scenario comparison + M2 COMPLETE
 
 ### Session objective
