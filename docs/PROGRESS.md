@@ -1,5 +1,42 @@
 # Progress Log
 
+## 2026-09-21 — M3.3 seed-set experiment runner
+
+### Session objective
+M3.3: scenario를 seed set 전체에 대해 실행하고, seed마다 두 controller가 동일 demand를 공유하며(D-006), 각 run에 `RunProvenance`(M3.2)를 부착하는 seed-set runner를 순수 도메인으로 구현한다.
+
+### Pre-code contract check (Phase C)
+- 데이터 의미/아키텍처 변경 없음: `runScenario`(M2.5)와 `buildRunProvenance`(M3.2) 재사용. `summary()`/`METRIC_VERSION`/golden·m2 fixture 불변. 신규 결정 없음(D-006/D-010 범위 내).
+
+### Completed
+- `src/simulation/runExperiment.ts`: `SeedRun`(seed, controllerKind, provenance, summary), `ExperimentResult`(scenarioId, scenarioVersion, seeds, controllers, runs), `runExperiment(scenario, seeds, kinds=['fixed','maxpressure'])`. seed마다 `{...scenario, seed}`로 각 controller를 돌려 seed-major로 수집. 우월 판단 없음(R2). runtime provenance 필드(runId/startedAt)는 부착 안 함 — persistence(M3.5)에서 부여(D-010).
+- `src/simulation/runExperiment.test.ts`: 7 테스트 — seed-major run 순서, **D-006**(seed 내 controller 간 `generated` 동일), seed 간 demand 인스턴스 변화(카운트는 rate 기반 seed-무관이라 avgWait 차이로 확인), provenance 부착(seed/controllerId/scenario/hash), (seed,controller)별 configHash 유일, 완전 결정성.
+
+### M3 Exit Criteria 진전
+- [x] Fixed/MaxPressure 동일 seed set 비교 — `runExperiment`가 동일 seed set에서 두 controller를 동일 demand로 실행(D-006 테스트).
+- [~] run마다 config hash / metric version — 각 `SeedRun.provenance`에 configHash·metricVersion 포함(저장은 M3.5).
+- [ ] raw samples vs aggregate 구분 — M3.4 남음(현재 aggregate `RunSummary`만).
+- [ ] export 스키마 — M3.6/3.7 남음.
+
+### Golden/M2 보존
+- `npm run check` 내 goldenRun + m2Comparison 통과 유지 → 기존 fixture byte-identical.
+
+### Tests actually run
+- `npm run check` → PASS (22 files, **146 tests**; 이전 139 + 신규 7; session ✓ active M3, tokens ✓, build ✓). seed-set 테스트의 12회 풀런(3 seed × 2 controller × 1800s + 결정성 재실행)도 ~0.4s.
+
+### Known issue
+- `docs/MILESTONES.md` 상태 라벨/UI "M1 active" 카피 stale(코드 무관, source of truth는 project-status.json).
+
+### Next exact actions (M3 계속)
+1. M3.4 metric sample schema: aggregate(`RunSummary`)와 raw per-sample time series를 분리. TrafficEngine tick 경로를 바꾸지 않는 non-invasive 샘플링 훅(예: 러너가 tick 스텝 사이에 `engine.metrics()` + 스냅샷 maxQueue 수집) 설계. 샘플 cadence는 결정에 남길지 검토(DECISIONS). 인메모리 roundtrip 테스트.
+2. M3.5 persistence: `src/persistence/`에서 `ExperimentResult`(provenance+summary+samples)를 Dexie로 저장/로드(reload 재현). run coordinator 경유, simulation은 Dexie 직접 호출 금지(ARCHITECTURE). runId/startedAt/codeVersion을 이 계층에서 부여(D-010). 테스트에 fake-indexeddb 필요 여부 확인.
+3. M3.6/M3.7 CSV(스프레드시트 판독) + JSON export/import roundtrip.
+
+### Active milestone
+M3 — Experiment Runner & Data Provenance (M3.1/M3.2/M3.3 done; M3.4–M3.7 남음).
+
+---
+
 ## 2026-09-21 — M3.1/M3.2 provenance foundation (versioned scenario schema + config hash)
 
 ### Session objective
