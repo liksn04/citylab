@@ -179,3 +179,19 @@ shared DQN의 action은 MVP에서 `HOLD | SWITCH` 둘뿐이다(D-002). 이를 �
 `actionToIntent(i)`가 인덱스를 `SignalIntent`로, `intentToAction(intent)`가 역매핑한다. 이 순서는 Q-output 헤드와
 replay buffer가 의존하는 계약이므로 바꾸면 D-016과 모델/버퍼 fixture를 함께 갱신한다. agent는 색/yellow를 직접
 정하지 않으며 min-green·yellow는 환경(`applySignalIntent`)이 강제한다(Q4, D-008).
+
+## Reward — M4 (D-017)
+
+shared DQN의 per-step reward는 학습 신호이지 집계 metric이 아니다(`metricVersion` 무관, observation/pressure와 같은
+범주). **per-intersection local reward = 그 교차로로 들어오는 모든 approach edge의 Q2 큐 합의 음수**다:
+`reward(I) = −Σ_{e.to==I} queue(e)`. 항상 ≤ 0, 혼잡이 덜할수록 0에 가깝다. 정의는 `src/rl/reward.ts`가 소유하며
+`queueLengthsByEdge`(Q2)와 approach index를 재사용한다. reward 스케일링/클리핑은 학습 하이퍼파라미터(M4.6) 소관으로
+정의(raw 음의 큐)와 분리한다. reward 정의를 바꾸면 D-017과 학습/평가 결과를 함께 갱신한다.
+
+## Replay transition — M4 (D-017)
+
+replay buffer가 저장하는 transition은 학습용 read model이다:
+`{ obs: number[], action: number, reward: number, nextObs: number[], done: boolean }`. `obs`/`nextObs`는 인코딩된
+관측(길이 `OBSERVATION_SIZE`, D-015), `action`은 `[0, ACTION_SIZE)` 인덱스(D-016), `reward`는 위 정의다. 버퍼는
+capacity 고정 ring이며 오래된 항목을 덮어쓰고, 샘플링은 프로젝트 seeded RNG(`RandomSource`)로 결정론적이다. 저장은
+비침습적이라 simulation 궤적/`summary()`에 영향이 없다.

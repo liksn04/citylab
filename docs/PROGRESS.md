@@ -1,5 +1,67 @@
 # Progress Log
 
+## 2026-09-22 — M4.3 replay buffer + reward definition (no training)
+
+### Session objective
+M4.3: 학습 transition을 담는 순수 ring replay buffer(결정론적 seeded 샘플링)와, 그 transition의 **reward 정의**를
+구현한다. 텐서/학습/모델/엔진 배선 없음.
+
+### Pre-code contract check (Phase C)
+- reward는 실험 지표/데이터 의미(학습 목표) → 코딩 전 `docs/DECISIONS.md` **D-017** + `docs/DATA_CONTRACTS.md`
+  "Reward — M4" & "Replay transition — M4" 기록. 사용자 결정: **음의 대기/큐** 방향. 엔진 실행 경로 무배선이라
+  metric/`summary()`/golden 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-017**: per-intersection local reward = `−Σ_{e.to==I} queue(e)`(Q2 큐 재사용, 항상 ≤ 0,
+  혼잡 적을수록 0). MVP 대기/큐 지표와 정렬, per-intersection observation(D-015)과 대칭, credit assignment 명확.
+  대안 4개(전역 큐 / throughput / per-tick 대기증가분 / −pressure 차분)와 determinism/metric impact(스케일링은 M4.6
+  하이퍼파라미터로 분리) 기록.
+- `docs/DATA_CONTRACTS.md`: "Reward — M4 (D-017)"(정의·metricVersion 무관·스케일 분리) + "Replay transition — M4"
+  (`{obs,action,reward,nextObs,done}` 스키마, ring/seeded 샘플링).
+- `src/rl/reward.ts`: `queueReward(movements, queueByEdge)`(음의 approach 큐 합; approach edge만, 진출/continuation
+  제외; `-0` 정규화) + `computeQueueRewards(index, queueByEdge)`(전 교차로, `computePressure`와 대칭). pressure/observation과
+  같은 부품(approach index + queueByEdge) 재사용.
+- `src/rl/replayBuffer.ts`: `Transition` 타입 + `ReplayBuffer`(capacity ring, `push`(초과 시 최老 덮어쓰기),
+  `sample(batchSize, rng: RandomSource)` — 프로젝트 seeded RNG로 복원추출·결정론, empty/비양수 batch 예외, capacity
+  검증). **텐서/학습 없음.**
+- `src/rl/reward.test.ts`(7): empty=0, 손계산 approach 합(진출 edge 제외 확인), 경계 corner 2-approach, ≤0, 결정성,
+  computeQueueRewards 16개·per-intersection 일치.
+- `src/rl/replayBuffer.test.ts`(6): capacity 검증, size/isFull, **ring eviction**(초과분 최老 축출을 대량 샘플로 확인),
+  복원추출(batch>size), seed 결정성, empty/비양수 batch 예외.
+- `src/rl/README.md`: M4.3 landed 반영.
+
+### M4 Exit Criteria 진전
+- M4.3도 exit criterion 자체가 아니라 학습 토대(reward + replay). M4 exit(학습 non-blocking, tensor leak, eval seed
+  고정, train/eval 분리, model snapshot, Fixed 대비 반복 eval 개선, 실패 scenario 기록)는 **미착수**. milestone 상태/게이트
+  변경 없음(M4 계속 active).
+
+### 금지 지름길 준수
+- TensorFlow.js/network/target/epsilon/update step/Web Worker/model save·load **미구현**. reward/buffer는 순수 함수·
+  자료구조. 엔진 실행 경로 무배선 → `summary()`/`metricVersion`/golden/m2 fixture 불변. UI 배선 없음.
+
+### Tests actually run
+- `npm run check` → PASS (32 files, **219 tests**; 이전 206 + 신규 13). session:check active M4 ✓, tokens ✓, build ✓.
+  (첫 실행에서 `-0` vs `0` 2건 실패 → reward에서 `-0` 정규화로 수정, 재실행 PASS.)
+
+### Known issue / env note
+- 동일 환경 이슈: `npm install`은 ERESOLVE(vitest@5 peerOptional @types/node vs 루트 @types/node@20)로
+  `--legacy-peer-deps` 필요. 코드/package.json 무변경.
+
+### Next exact actions (M4 계속)
+1. M4.4 online + target network(TensorFlow.js, `src/rl/`): 입력 `OBSERVATION_SIZE`→은닉→`ACTION_SIZE` Q-head, target은
+   online의 복제(주기적 동기화). shape 테스트 + **tensor dispose(leak 없음)** — `tf.memory().numTensors` 전후 비교.
+   네트워크 하이퍼파라미터(은닉 크기/학습률)는 DECISIONS에 간단 기록.
+2. M4.5 epsilon-greedy 스케줄(결정론적, 순수) — start/end/decay, step→epsilon. 3. M4.6 DQN update step(replay 샘플 →
+   target y = r + γ·maxQ(next)·(1−done), Huber/MSE loss, 텐서 dispose·loss 유한). reward 스케일링/γ는 여기서.
+3. M4.7 training worker 프로토콜(main↔worker 메시지, ARCHITECTURE) → M4.8 model save/load(예측 parity) → M4.9
+   evaluation runner(엔진에 `controllerKind='dqn'` 배선 + provenance/runConfig 확장 D-010, train/eval seed 분리) →
+   M4.10 Fixed 대비 반복-seed eval(실패도 기록, R2).
+
+### Active milestone
+M4 — Shared DQN Training (M4.1/M4.2/M4.3 done; M4.4–M4.10 남음).
+
+---
+
 ## 2026-09-21 — M4.2 shared-DQN action adapter + injectable policy seam (no training)
 
 ### Session objective

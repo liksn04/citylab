@@ -381,3 +381,37 @@ Q-output이 안정된 계약 위에 놓인다.
 무배선, 순수 어댑터). 주어진 결정론적 policy에 대해 `decide`는 결정론적. action 순서/매핑을 바꾸면 이 결정과 이후 모델·
 버퍼 fixture를 함께 갱신한다. 의존 방향 합법: `rl → controller contract` + `rl` 내부(action↔observation) — `simulation
 → rl` 간선 없음(ARCHITECTURE).
+
+## D-017 — Shared-DQN reward: negative local approach-queue (M4.3)
+**Status:** accepted (M4)
+
+M4 학습의 목표(무엇이 "더 나은" 신호 제어인가)를 정의하는 reward다. **보상은 데이터 의미**를 바꾸므로 코딩 전에 결정으로
+남긴다(핵심 제약). shared network + per-intersection observation/action(D-002)에 맞춰 **per-intersection local reward**를
+쓴다:
+
+> `reward(I, step) = −Σ_{approach edge e, e.to == I} queue(e)`
+
+`queue(e)`는 M1 Q2 정의(`analytics/metrics.queueLengthsByEdge`)를 그대로 쓴다 — 그 교차로로 들어오는 모든 approach
+edge의 정지 대기 차량 수 합의 **음수**다. 값은 항상 ≤ 0이며, 대기 차량이 적을수록(혼잡이 덜할수록) 0에 가깝다. 구현은
+`src/rl/reward.ts`의 순수 함수 `queueReward(movements, queueByEdge)`(교차로 하나) + `computeQueueRewards(index,
+queueByEdge)`(전 교차로, `computePressure`와 대칭)로, 매 tick 이미 계산되는 approach index + per-edge queue map을
+재사용한다.
+
+**Reason (음의 대기/큐 채택 — 사용자 선택):** MVP 주지표(avg/p95 대기·maxQueue)와 직접 정렬된다 — 대기 차량 수를 줄이는
+것이 곧 누적 대기시간·큐를 줄이는 것이다. queued 차량은 Q2 정의상 정지선 근처에 멈춰 대기 중이라 "대기"와 "큐"가 같은
+신호로 수렴한다. per-intersection local reward는 각 교차로의 action에 credit을 직접 부여해 credit assignment가 명확하고
+per-intersection observation(D-015)과 대칭이다. 순수·결정론적이라 fixture로 검증 가능하며 pressure/observation과 같은
+부품(approach index, queueByEdge)을 재사용한다.
+
+**Alternatives considered:**
+- (a) 전역(network-wide) 총 큐의 음수 — 한 교차로 action이 전체 보상에 희석돼 credit assignment가 흐려짐. local 채택.
+- (b) throughput(+완료 차량) 기반 — 포화 전 신호가 약하고 대기 tail(R2)을 직접 벌하지 않음. 대기/큐가 MVP 지표에 더 부합.
+- (c) 매 tick 대기시간 증가분(−Σ 이번 tick 대기 차량 × TICK_SEC) — 큐 수와 강한 상관이나 엔진에 per-tick 대기 증가분
+  노출 seam이 필요. 같은 취지를 스냅샷 큐 합으로 근사(추가 seam 불필요)해 채택.
+- (d) −pressure(up−down 차분) — 균형 잡힌 대혼잡이 0이 되어 절대 혼잡도를 못 벌함. 절대 큐 채택.
+
+**Determinism/metric impact:** 보고 metric·`metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(reward는 학습
+신호이지 집계 metric이 아님 — observation/pressure와 같은 범주). reward 정의(로컬 vs 전역, 큐 vs 대기증가분, 스케일)를
+바꾸면 학습 의미가 바뀌므로 이 결정과 이후 학습/평가 결과를 함께 갱신한다. reward **스케일링/클리핑**은 학습
+하이퍼파라미터(M4.6) 소관이며 정의(raw 음의 큐)와 분리한다. 의존: `rl → simulation`(queue map/approach index 재사용),
+금지된 `simulation → rl` 없음.

@@ -10,8 +10,13 @@ Architecture lock (D-002, MILESTONES M4): a **shared** policy network with a
 Landed:
 
 - `observation.ts` — M4.1 observation encoder/normalizer (D-015). Pure; no training.
+- `action.ts` + `DqnController.ts` — M4.2 action space + action adapter with an
+  injectable `Policy` seam (D-016). Pure; no tensors/training; safety stays
+  environment-owned.
+- `reward.ts` + `replayBuffer.ts` — M4.3 per-intersection reward (D-017) and a
+  seeded, deterministic ring replay buffer. Pure; no tensors/training.
 
-Still gated to later M4 slices (do not pull forward): replay buffer, online +
-target network, epsilon schedule, DQN update step, Web Worker training protocol,
-model save/load, and evaluation with train/eval seed separation. Keep min-green
-and yellow environment-owned via `signalMachine`.
+Still gated to later M4 slices (do not pull forward): online + target network,
+epsilon schedule, DQN update step, Web Worker training protocol, model save/load,
+and evaluation with train/eval seed separation. Keep min-green and yellow
+environment-owned via `signalMachine`.
