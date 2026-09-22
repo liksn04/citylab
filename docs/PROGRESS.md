@@ -1,5 +1,52 @@
 # Progress Log
 
+## 2026-09-22 — M4.8 model save/load (prediction parity)
+
+### Session objective
+M4.8: 학습된 Q-network를 저장→로드 후 **동일 입력 예측 parity**를 보장한다. node 테스트 가능한 in-memory tf.io
+artifacts를 사용한다.
+
+### Pre-code contract check (Phase C)
+- tf 표준 직렬화 메커니즘(ModelArtifacts) — 데이터 의미/아키텍처 의존/visual primitive 변경 없음 → 별도 ADR 불필요.
+  metric/`summary()`/golden 불변. tf.io round-trip이 node에서 동작함을 사전 스모크로 확인(parity true).
+
+### Completed
+- `src/rl/qNetwork.ts`: predict 로직을 `predictQValues(model, observations)`로 **추출**(로드된 LayersModel도 예측
+  가능, M4.9 greedy policy에서 재사용). `DqnModel.predictQ/predictTargetQ`가 이를 호출(동작 불변, 기존 테스트 통과).
+- `src/rl/modelStorage.ts`: `serializeQNetwork(model)`(`tf.io.withSaveHandler`로 ModelArtifacts 캡처) +
+  `loadQNetwork(artifacts)`(`tf.io.fromMemory`). artifacts는 topology+weightSpecs+weightData(휴대 가능; 메모리/JSON/
+  IndexedDB 저장 가능, 실제 IndexedDB 배선은 앱/후속).
+- `src/rl/modelStorage.test.ts`(4): **예측 parity**(로드 후 bit-identical), artifacts 필드 존재, 로드 모델 아키텍처
+  (weight shapes) 일치, **leak 0**(serialize/load/predict/dispose 전후 `numTensors` 동일).
+
+### M4 Exit Criteria 진전
+- "model snapshot 저장/로드" 충족(parity + leak 0). eval seed 고정/분리·Fixed 대비 개선·실패 기록은 M4.9/M4.10.
+  milestone/게이트 변경 없음(M4 active).
+
+### 금지 지름길 준수
+- 엔진 `controllerKind='dqn'` 배선/실제 학습 루프/UI 배선 **미구현**(M4.9). save/load 메커니즘 + predict 추출만.
+  golden/`metricVersion` 불변, build 번들 무증가.
+
+### Tests actually run
+- `npm run check` → PASS (37 files, **256 tests**; 이전 252 + 신규 4). session:check ✓, tokens ✓, build ✓.
+
+### Known issue / env note
+- `npm install`은 `--legacy-peer-deps` 필요(ERESOLVE). node 테스트는 in-memory IOHandler 사용(IndexedDB/fake-indexeddb
+  불필요). 실제 `indexeddb://` 저장은 브라우저(앱)에서.
+
+### Next exact actions (M4 계속 — 마지막 2개)
+1. M4.9 eval runner: `TrafficEngine`에 `controllerKind='dqn'` 배선 — `DqnController`(M4.2) + greedy policy(=argmax
+   `predictQValues(model, [obs])`)를 주입. provenance/runConfig 확장(D-010, controllerId 'dqn-v1'; canonicalizeRunConfig가
+   dqn 분기 처리). **train seed set과 eval seed set 분리**(TEST_STRATEGY); eval은 epsilon=0 greedy. 학습 루프는
+   TrainingSession(D-020)에 엔진 transition을 push해 구동(가능하면 headless). golden Fixed는 byte-identical 유지(회귀 가드).
+2. M4.10 Fixed 대비 반복-seed eval: 여러 eval seed에서 요약 비교를 실제 run으로 산출·기록(개선/열세/실패 모두 그대로, R2).
+   그 후 M4 exit criteria 7개 재평가 → 충족 시에만 milestone 전진(AI_AGENT_GUIDE), 미충족이면 있는 그대로 남김.
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.8 done; M4.9–M4.10 남음).
+
+---
+
 ## 2026-09-22 — M4.7 training worker protocol (pure session + thin glue)
 
 ### Session objective

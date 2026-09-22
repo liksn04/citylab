@@ -22,7 +22,11 @@ Landed:
 - `dqnUpdate.ts` — M4.6 DQN update step (TensorFlow.js, D-019): DqnTrainer
   trainStep(batch) — Huber loss on the online Q of the taken action vs a
   target-net bootstrap, one Adam step. Leak-free (tf.tidy/dispose).
+- `modelStorage.ts` — M4.8 serialize/load a Q-network to portable in-memory
+  tf.io artifacts with bit-identical prediction parity. (`predictQValues` in
+  qNetwork.ts predicts from any loaded model.)
 
-Still gated to later M4 slices (do not pull forward): Web Worker training
-protocol, model save/load, and evaluation with train/eval seed separation. Keep
+Still gated to later M4 slices (do not pull forward): engine wiring
+(`controllerKind='dqn'`) + evaluation runner with train/eval seed separation
+(M4.9), and repeated-seed evaluation vs the Fixed baseline (M4.10). Keep
 min-green and yellow environment-owned via `signalMachine`.

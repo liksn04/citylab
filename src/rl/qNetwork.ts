@@ -26,6 +26,20 @@ export function buildQNetwork(hiddenUnits = DQN_HIDDEN_UNITS): tf.Sequential {
 }
 
 /**
+ * Q-values for a batch of observations from any Q-network (online, target, or a
+ * loaded model). Returns rows of length ACTION_SIZE as plain arrays; leak-free
+ * (tf.tidy + arraySync). An empty batch returns [].
+ */
+export function predictQValues(model: tf.LayersModel, observations: number[][]): number[][] {
+  if (observations.length === 0) return []
+  return tf.tidy(() => {
+    const input = tf.tensor2d(observations, [observations.length, OBSERVATION_SIZE])
+    const q = model.predict(input) as tf.Tensor
+    return q.arraySync() as number[][]
+  })
+}
+
+/**
  * Owns the online network and its periodically-synced target clone (D-018). The
  * target stabilizes DQN bootstrap targets; `syncTarget()` copies online weights
  * into it. Predictions return plain arrays; call `dispose()` to free both.
@@ -49,21 +63,12 @@ export class DqnModel {
 
   /** Online Q-values for a batch of observations → rows of length ACTION_SIZE. */
   predictQ(observations: number[][]): number[][] {
-    return this.predictWith(this.online, observations)
+    return predictQValues(this.online, observations)
   }
 
   /** Target Q-values for a batch of observations → rows of length ACTION_SIZE. */
   predictTargetQ(observations: number[][]): number[][] {
-    return this.predictWith(this.target, observations)
-  }
-
-  private predictWith(model: tf.Sequential, observations: number[][]): number[][] {
-    if (observations.length === 0) return []
-    return tf.tidy(() => {
-      const input = tf.tensor2d(observations, [observations.length, OBSERVATION_SIZE])
-      const q = model.predict(input) as tf.Tensor
-      return q.arraySync() as number[][]
-    })
+    return predictQValues(this.target, observations)
   }
 
   /** Free both networks' tensors. After this the model must not be used. */
