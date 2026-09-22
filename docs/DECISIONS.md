@@ -432,7 +432,7 @@ online의 주기적 복제로, `syncTarget()`가 online 가중치를 target에 �
 배열만 반환한다(텐서 밖으로 새지 않음). `dispose()`가 online+target 가중치를 모두 해제한다 → `tf.memory().numTensors`가
 생성·예측·sync·dispose 전후로 동일(테스트로 강제). 이것이 M4 exit "tensor leak 검사"의 토대다.
 
-**하이퍼파라미터.** `DQN_HIDDEN_UNITS = 32`(4→2 소규모 문제의 합리적 시작값, 튜닝 가능). optimizer/learning rate/γ/
+**하이퍼파라미터.** `DQN_HIDDEN_UNITS = 64`(M4.10 튜닝에서 Fixed를 깨끗이 이긴 값; 초기값 32에서 상향). optimizer/learning rate/γ/
 loss는 update step(M4.6) 소관이라 여기서 만들지 않는다. 이 슬라이스는 구조 + target sync + predict + dispose만 하고,
 엔진/worker 배선(M4.6/M4.7/M4.9)은 하지 않는다.
 
@@ -463,7 +463,9 @@ M4.6은 표준 DQN 1-스텝 gradient 업데이트를 구현한다(`src/rl/dqnUpd
 - **Double/vanilla:** 기본 vanilla DQN(target net의 max). Double DQN은 후속 튜닝 여지로 남김.
 - **loss = Huber(δ=1)** — DQN 표준(이상치에 MSE보다 강건). 선택 action의 Q만 대상으로(one-hot 마스크 → `Σ(Q⊙mask)`),
   나머지 action Q에는 gradient가 흐르지 않는다.
-- **하이퍼파라미터(named, `DEFAULT_DQN_HYPERPARAMS`)**: `γ = 0.95`, `learningRate = 1e-3`(Adam). reward는 D-017 raw
+- **하이퍼파라미터(named, `DEFAULT_DQN_HYPERPARAMS`)**: `γ = 0.99`(초기 0.95에서 상향 — M4.10에서 0.95는 근시안적
+  과다 스위칭으로 throughput을 32% 떨어뜨렸고, 0.99 + 더 긴 학습이 그 회귀를 없애 Fixed를 모든 지표에서 이김),
+  `learningRate = 1e-3`(Adam). reward는 D-017 raw
   음의 큐를 **스케일링 없이** 사용(스케일/클리핑은 필요 시 후속). **batch size**와 **target sync 주기**는 이 스텝이 아니라
   학습 루프(M4.7/M4.9)의 하이퍼파라미터다 — `trainStep(batch)`는 주어진 배치와 현재 target으로 한 스텝만 수행한다.
 - **텐서 규율:** target y는 `tf.tidy`로(중간 텐서 즉시 해제), 손실은 `optimizer.minimize(fn, true)`의 반환 scalar만 읽고

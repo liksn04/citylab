@@ -14,8 +14,11 @@ import { OBSERVATION_SIZE } from './observation'
  * No optimizer/loss/training here — that is the update step (M4.6).
  */
 
-/** Hidden units of the single-layer Q-network (D-018). A tunable starting point. */
-export const DQN_HIDDEN_UNITS = 32
+/**
+ * Hidden units of the single-layer Q-network (D-018). Set to 64 — the value that
+ * produced a clean Fixed-beating policy in the M4.10 tuning (D-019 note).
+ */
+export const DQN_HIDDEN_UNITS = 64
 
 /** Build one Q-network: OBSERVATION_SIZE -> Dense(hidden, relu) -> Dense(ACTION_SIZE, linear). */
 export function buildQNetwork(hiddenUnits = DQN_HIDDEN_UNITS): tf.Sequential {

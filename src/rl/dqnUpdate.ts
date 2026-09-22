@@ -27,8 +27,12 @@ export interface DqnHyperparams {
   learningRate: number
 }
 
-/** Default training hyperparameters (D-019). Tunable. */
-export const DEFAULT_DQN_HYPERPARAMS: DqnHyperparams = { gamma: 0.95, learningRate: 1e-3 }
+/**
+ * Default training hyperparameters (D-019). gamma is 0.99 — the M4.10 tuning
+ * showed the longer horizon removes the myopic over-switching that regressed
+ * throughput at gamma 0.95, yielding a clean win over Fixed.
+ */
+export const DEFAULT_DQN_HYPERPARAMS: DqnHyperparams = { gamma: 0.99, learningRate: 1e-3 }
 
 export class DqnTrainer {
   readonly model: DqnModel

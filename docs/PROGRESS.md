@@ -1,5 +1,57 @@
 # Progress Log
 
+## 2026-09-22 — M4.10 tuning — CLEAN win over Fixed (all 7 M4 exit criteria met)
+
+### Session objective
+사용자 선택("더 학습/튜닝"): reward(D-017)는 그대로 두고 **에피소드 수·하이퍼파라미터만** 조정해 이전 MIXED 결과
+(throughput −32%)를 개선한다.
+
+### What changed (튜닝, reward 불변)
+- `γ = 0.95 → 0.99`(미래 가치 반영 → 근시안적 과다 스위칭 억제), `DQN_HIDDEN_UNITS = 32 → 64`, 학습 규모 상향
+  (episodes 24→60, trainStepsPerEpisode 150→200, batch 32→64, bufferCapacity 20k→50k, targetSyncInterval 200→500,
+  epsilon end 0.05→0.02). **reward 정의(D-017) 미변경** → 새 ADR 불필요. 기본값(`DEFAULT_DQN_HYPERPARAMS.gamma`,
+  `DQN_HIDDEN_UNITS`)을 성공 config으로 갱신하고 D-018/D-019에 노트.
+
+### 실제 측정 (있는 그대로 — balanced-4x4-v1, 60 episodes ~53s 학습, eval seeds 51001~51004 = train 41021..41028과 disjoint)
+| 지표 | DQN(greedy) | Fixed | 판정 |
+|---|---:|---:|---|
+| avg wait | **2.64s** | 12.20s | 개선 −78% |
+| p95 wait | **9.5s** | 37.5s | 개선 −75% |
+| throughput(완료) | **591.3** | 587.5 | 동등+(회귀 해소) |
+| max queue | **2.25** | 4.25 | 개선 |
+| signal switches | **341** | 1248 | 개선(과다 스위칭 해소) |
+- 4개 eval seed 전부 일관: DQN avg 2.5~2.8s vs Fixed ~12.1~12.3s, throughput 590~592 vs 586~590.
+- **DQN이 모든 지표에서 Fixed를 지배**(트레이드오프 소멸). gamma↑가 "스위칭→yellow→미래 큐 증가"를 벌해 스위칭이
+  341회로 급감하면서 대기·처리량·큐를 동시에 개선. 재현성: 초기화 확률적(R8)이라 정확 수치는 run마다 변하나 방향은 견고.
+
+### M4 Exit Criteria — 전부 충족
+- [x] 학습 루프 non-blocking — worker 프로토콜(M4.7).
+- [x] tensor leak 검사 — 전 파이프라인 leak 0.
+- [x] seed가 evaluation에서 고정 — `evaluateDqn` 결정론.
+- [x] training/evaluation seed 분리 — train 41021.. vs eval 51001.. (harness+테스트 강제).
+- [x] model snapshot 저장/로드 — M4.8 parity.
+- [x] **최소 한 제공 scenario에서 Fixed 대비 반복 evaluation 개선 — 충족.** balanced-4x4-v1 4개 disjoint eval seed에서
+  모든 지표 개선(트레이드오프 없음).
+- [x] 실패도 기록 — 직전 MIXED 결과(아래 항목)를 그대로 보존.
+
+### Milestone decision
+- 7개 exit criteria 전부 evidence 존재 + `npm run check` 통과. **단, 사용자 선택은 "더 학습/튜닝"이었고 milestone 전진
+  여부는 별도 확인 대상** → 본 세션에서는 M4를 `active`로 유지하고 clean-win 근거만 기록. 전진(M4 done/M5 active)은 사용자
+  승인 시 AI_AGENT_GUIDE 절차로 수행.
+
+### Tests actually run
+- `npm run check` → PASS (42 files, 274 tests; 기본값 변경으로 재검증). session ✓, tokens ✓, build ✓.
+- 튜닝 full run(60 ep) 1회 → 위 표. committed 테스트는 승패 비단언 fast 버전 유지(초기화 확률적, R8).
+
+### Next exact actions
+1. (사용자 승인 시) M4 전진: `project-status.json` M4 done/M5 active, gate evidence 기록.
+2. M5(Analytics)에서 이 DQN-vs-Fixed 비교를 실제 run 데이터로 시각화(하드코딩 금지). train/eval seed·provenance 표시.
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.10 구현·검증 완료, 모든 exit criteria 충족; 전진은 사용자 승인 대기).
+
+---
+
 ## 2026-09-22 — M4.10 baseline evaluation (DQN vs Fixed) — MIXED result (R2), M4 NOT advanced
 
 ### Session objective
