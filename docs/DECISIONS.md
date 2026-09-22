@@ -484,3 +484,45 @@ DQN의 표준(관측된 action의 Q만 학습). 하이퍼파라미터를 named �
 학습은 확률적(가중치 초기화·SGD, R8)이라 결정론 대상이 아니며, 재현성은 eval seed 분리(M4.9)로 확보한다. γ·lr·loss·
 reward 스케일을 바꾸면 이 결정과 학습/평가 결과를 함께 갱신한다. 의존: `rl → simulation`(RandomSource/상수) +
 `@tensorflow/tfjs` — 금지된 `simulation → rl` 없음.
+
+## D-020 — Training worker protocol: pure session + thin glue (M4.7)
+**Status:** accepted (M4)
+
+M4.7은 ARCHITECTURE의 main↔worker 경계(학습을 별도 스레드로)를 처음 구현한다. 렌더링/상호작용은 main에, TFJS 학습
+batch path는 worker에 두어 학습이 UI 스레드를 장시간 block하지 않게 한다(M4 exit "학습 루프 non-blocking", R3).
+
+**pure session vs thin glue 분리(핵심).** Web Worker/`self`/`postMessage`는 node(vitest)에서 실행 불가하므로
+protocol을 두 계층으로 나눈다:
+- `src/workers/trainingProtocol.ts` — **순수** 메시지 타입 + `TrainingSession` 클래스. RL 부품(DqnModel/ReplayBuffer/
+  DqnTrainer/epsilon schedule/seeded RNG, D-015~D-019)을 소유하고 `handle(command): TrainingResponse[]`로 명령을
+  처리한다. `self`/DOM/Worker API에 의존하지 않아 node에서 tfjs와 함께 그대로 테스트된다(message integration test).
+- `src/workers/trainingWorker.ts` — **얇은 glue**. `const ctx = self as unknown as DedicatedWorkerGlobalScope`로
+  캐스팅해 `ctx.onmessage`→`session.handle`→`ctx.postMessage`만 잇는다(로직 없음). DOM+WebWorker lib 혼재로 인한
+  `self` 타이핑 모호성을 캐스팅으로 피한다. 테스트 대상 아님(경계), tsc만 통과. 아직 앱/엔진에 배선하지 않는다.
+
+**메시지 스키마.** command(main→worker): `init(config)` / `push(transitions)` / `train(steps)` / `stop`.
+response(worker→main): `ready` / `progress(step, loss, epsilon, bufferSize)` / `skipped(reason, bufferSize)` /
+`stopped` / `error(message)`. `train`은 스텝을 **청크로** 돌며 스텝마다 progress를 방출(간헐 yield로 non-blocking),
+`targetSyncInterval`마다 target 동기화, buffer가 `minBufferToTrain` 미만이면 `skipped`. seeded RNG로 minibatch 샘플링
+결정론(가중치 학습 자체는 확률적, R8).
+
+**transition 출처.** 이 슬라이스에서 session은 `push`로 받은 transition으로 학습만 한다. **엔진(TrafficEngine +
+DqnController)을 worker 안에서 돌려 transition을 생성하는 배선은 M4.9(eval runner)** 소관이다(scope 최소화). 즉 M4.7은
+"학습 batch를 스레드 밖에서 청크 실행하고 진행/loss를 보고하는 프로토콜"을 확정한다.
+
+**Reason:** 순수 session으로 분리하면 (a) Worker 없이 node에서 protocol 전체를 통합 테스트하고, (b) glue는 자명해
+테스트 불필요하며, (c) M4.9가 이 session에 엔진 transition을 연결만 하면 된다. 청크 train + progress 보고는 UI가
+학습 중에도 반응하도록 하는 non-blocking 계약의 근거다.
+
+**Alternatives considered:**
+- (a) worker 파일에서 직접 로직 구현(순수 분리 없음) — node 테스트 불가, message 통합 검증 곤란. 분리 채택.
+- (b) 지금 worker 안에서 TrafficEngine까지 돌림 — 엔진 배선(controllerKind 'dqn')·provenance는 M4.9 소관, 여기로
+  당기면 슬라이스 비대. push/train 프로토콜로 분리.
+- (c) `Comlink` 등 RPC 라이브러리 — 의존성 증가 대비 이득 미미. 단순 postMessage 프로토콜로 충분.
+- (d) `self`를 DOM/WebWorker 유니온 그대로 사용 — `postMessage` 시그니처 충돌(Window.postMessage는 targetOrigin
+  요구). `DedicatedWorkerGlobalScope` 캐스팅으로 회피.
+
+**Determinism/metric impact:** 보고 metric·`metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(엔진 무배선,
+순수 학습 조율). minibatch 샘플링은 seed 결정론이나 network 학습은 확률적(R8) — 재현성은 eval seed 분리(M4.9). 메시지
+스키마를 바꾸면 이 결정과 glue/consumer(M4.9)를 함께 갱신한다. 의존: `workers → rl → {simulation, tfjs}` — 금지된
+`simulation → {rl, workers}` 없음(ARCHITECTURE).

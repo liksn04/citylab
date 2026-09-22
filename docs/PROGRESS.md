@@ -1,5 +1,59 @@
 # Progress Log
 
+## 2026-09-22 — M4.7 training worker protocol (pure session + thin glue)
+
+### Session objective
+M4.7: ARCHITECTURE main↔worker 경계를 구현한다. 순수 `TrainingSession`(메시지 프로토콜)과 얇은 worker glue로 나눠
+학습 batch path를 스레드 밖 청크 실행 + 진행/loss 보고로 두고, message integration을 node에서 검증한다.
+
+### Pre-code contract check (Phase C)
+- worker 경계/메시지 스키마 = 아키텍처 변경 → 코딩 전 `docs/DECISIONS.md` **D-020** 기록. 엔진 무배선이라
+  metric/`summary()`/golden 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-020**: pure session vs thin glue 분리(node 테스트 가능), 메시지 스키마
+  (init/push/train/stop → ready/progress/skipped/stopped/error), 청크 train + targetSync + epsilon 보고, transition은
+  `push`로 받음(엔진 배선은 M4.9). `self`는 `DedicatedWorkerGlobalScope` 캐스팅. 대안 4개.
+- `src/workers/trainingProtocol.ts`: `TrainingConfig`, `TrainingCommand`/`TrainingResponse`, `TrainingSession`
+  (`handle(command)→responses`, `dispose()`). model/buffer/trainer/epsilon(D-015~019) + seeded RNG 소유. init 전 명령/
+  비양수 steps/버퍼 부족(skipped)/에러 래핑 처리. `train`은 스텝마다 progress{step,loss,epsilon,bufferSize}, sync 주기
+  target 동기화.
+- `src/workers/trainingWorker.ts`: 얇은 glue(`ctx=self as DedicatedWorkerGlobalScope`; onmessage→handle→postMessage).
+  로직 없음, 테스트 대상 아님, 앱 미배선.
+- `src/workers/trainingProtocol.test.ts`(8): init 전 error, ready, buffer<min → skipped, 스텝당 progress(유한 loss·
+  step 증가·epsilon=epsilonAt·bufferSize), sync 경계 통과, 비양수 steps error, stop 후 세션 clear·재명령 error, **leak 0**.
+- `src/workers/README.md`: M4.7 landed 반영.
+
+### M4 Exit Criteria 진전
+- "학습 루프가 main UI thread를 장시간 block하지 않음"의 **아키텍처 근거** 마련(worker + 청크 train/progress). "tensor
+  leak 검사"도 세션 lifecycle에서 0 확인. eval seed 분리·model snapshot·Fixed 대비 개선·실패 기록은 M4.8~M4.10.
+  milestone/게이트 변경 없음(M4 active).
+
+### 금지 지름길 준수
+- worker 안에서 TrafficEngine 구동/엔진 `controllerKind='dqn'` 배선/model save·load/UI 배선 **미구현**(M4.8/M4.9).
+  transition은 push로만 받음. golden/`metricVersion` 불변, build 번들 무증가(앱이 worker 미import).
+
+### Tests actually run
+- `npm run check` → PASS (36 files, **252 tests**; 이전 244 + 신규 8). session:check ✓, tokens ✓, build ✓(worker glue
+  tsc 통과).
+
+### Known issue / env note
+- `npm install`은 `--legacy-peer-deps` 필요(ERESOLVE). 실제 Web Worker 실행/`postMessage` round-trip은 node에서 검증
+  불가 → 순수 `TrainingSession`으로 프로토콜을 검증(glue는 경계). worker 안 엔진 구동/실제 backend는 M4.9.
+
+### Next exact actions (M4 계속)
+1. M4.8 model save/load: `tf.io`(IndexedDB `indexeddb://` 또는 in-memory handler)로 online 저장→로드 후 동일 입력
+   예측 parity 테스트. node 테스트는 in-memory IOHandler(또는 fake-indexeddb) 사용 여부 확인.
+2. M4.9 eval runner: `TrafficEngine`에 `controllerKind='dqn'` 배선(DqnController + greedy policy=argmax `predictQ`) +
+   provenance/runConfig 확장(D-010, controllerId 'dqn-v1'). worker가 엔진을 돌려 transition을 `push`로 공급(D-020).
+   **train seed set과 eval seed set 분리**(TEST_STRATEGY). eval은 epsilon=0 greedy.
+3. M4.10 Fixed 대비 반복-seed eval: 여러 eval seed에서 요약 비교, 실제 run 숫자로 기록(실패/열세도 숨기지 않음 R2).
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.7 done; M4.8–M4.10 남음).
+
+---
+
 ## 2026-09-22 — M4.6 DQN update step (TensorFlow.js; single gradient step)
 
 ### Session objective
