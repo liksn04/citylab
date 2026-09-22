@@ -34,13 +34,15 @@ export interface RunConfig {
  * and "state the default explicitly" collapse to the same config (D-010):
  * - fixed: greenSec = override ?? FIXED_GREEN_SEC, yellowSec = override ?? YELLOW_SEC,
  *   minGreenSec = 0 (the env must not interfere with the fixed timer).
- * - maxpressure: greenSec = null (adaptive), yellowSec = YELLOW_SEC,
+ * - maxpressure / dqn: greenSec = null (adaptive), yellowSec = YELLOW_SEC,
  *   minGreenSec = MIN_GREEN_SEC. Fixed-time timing overrides are ignored, exactly
- *   as TrafficEngine ignores them for adaptive controllers.
+ *   as TrafficEngine ignores them for adaptive controllers. The learned model's
+ *   weights are NOT part of the config hash (non-deterministic/backend-dependent,
+ *   R8; run identity is the conditions, not the trained parameters — D-021).
  */
 export function canonicalizeRunConfig(config: EngineConfig): RunConfig {
   const controllerKind: ControllerKind = config.controllerKind ?? 'fixed'
-  const isMaxPressure = controllerKind === 'maxpressure'
+  const isAdaptive = controllerKind === 'maxpressure' || controllerKind === 'dqn'
   return {
     tickSec: TICK_SEC,
     rows: config.rows,
@@ -49,9 +51,9 @@ export function canonicalizeRunConfig(config: EngineConfig): RunConfig {
     vehiclesPerHour: config.vehiclesPerHour,
     durationSec: config.durationSec,
     controllerKind,
-    greenSec: isMaxPressure ? null : config.controller?.greenSec ?? FIXED_GREEN_SEC,
-    yellowSec: isMaxPressure ? YELLOW_SEC : config.controller?.yellowSec ?? YELLOW_SEC,
-    minGreenSec: isMaxPressure ? MIN_GREEN_SEC : 0,
+    greenSec: isAdaptive ? null : config.controller?.greenSec ?? FIXED_GREEN_SEC,
+    yellowSec: isAdaptive ? YELLOW_SEC : config.controller?.yellowSec ?? YELLOW_SEC,
+    minGreenSec: isAdaptive ? MIN_GREEN_SEC : 0,
     metricVersion: METRIC_VERSION,
   }
 }

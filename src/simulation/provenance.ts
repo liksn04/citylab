@@ -25,6 +25,7 @@ export interface RunProvenance {
 export const CONTROLLER_IDS: Record<ControllerKind, string> = {
   fixed: 'fixed-v1',
   maxpressure: 'maxpressure-v1',
+  dqn: 'dqn-v1',
 }
 
 /**

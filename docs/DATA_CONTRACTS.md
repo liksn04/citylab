@@ -151,3 +151,47 @@ throughputPerHour, maxQueue }`. 정의는 `src/analytics/metricSamples.ts`가 �
 - sample의 `maxQueue`는 **그 tick의 순간 최대 단일-edge queue**(Q2), `RunSummary.maxQueue`는 **run 전체
   최댓값**이다 → 항상 `RunSummary.maxQueue ≥ max(sample.maxQueue)`. 두 값을 혼용하지 않는다.
 - 샘플링은 read-only(`TrafficEngine.sample()`)이며 tick 로직·`summary()`·결정성에 영향이 없다.
+
+## Observation encoding — M4 (D-015)
+
+shared DQN이 보는 per-intersection observation은 보고 metric이 아니라 RL **제어 입력** 표현이다(`metricVersion`과
+무관, pressure/D-009와 같은 범주). 정의는 `src/rl/observation.ts`가 소유하며, 환경이 매 green 결정 tick에 controller에게
+넘기는 `ObservationInput`(base timing + lane pressure)에서 **순수 함수**로 파생한다. 하나의 network를 모든 교차로·phase가
+공유하므로 인코딩은 **현재 green axis 기준 상대값**으로 고정한다(D-002/D-015).
+
+고정 길이 벡터 `OBSERVATION_SIZE = 4`, 순서는 `OBSERVATION_FEATURES`:
+
+1. `pressureCurrent = tanh(pressure[current] / PRESSURE_OBS_SCALE)` ∈ [−1, 1] (float64에서 큰 값은 ±1로 포화)
+2. `pressureOther   = tanh(pressure[other]   / PRESSURE_OBS_SCALE)` ∈ [−1, 1] (float64에서 큰 값은 ±1로 포화)
+3. `phaseProgress   = clamp(phaseElapsedSec / PHASE_TIME_OBS_SCALE, 0, 1)` ∈ [0, 1]
+4. `minGreenSatisfied ∈ {0, 1}`
+
+- `current = input.activeAxis`, `other`는 그 반대 axis. **NS green과 EW green은 pressure를 대칭으로 주면 동일한
+  벡터**를 만든다(phase-대칭 shared 인코딩).
+- 스케일은 단일 출처 상수에서 파생: `PRESSURE_OBS_SCALE = EDGE_CAPACITY`, `PHASE_TIME_OBS_SCALE = FIXED_GREEN_SEC`.
+- **green 전용:** encoder는 `activeAxis ≠ null`(green)에서만 정의된다(controller가 호출되는 순간). YELLOW
+  observation은 예외를 던진다(Q4: yellow 동안 결정 없음). 모든 출력 성분은 유한하고 위 범위 안이다.
+
+## Action space — M4 (D-016)
+
+shared DQN의 action은 MVP에서 `HOLD | SWITCH` 둘뿐이다(D-002). 이를 고정 순서 이산 인덱스로 계약한다
+(`src/rl/action.ts`): `ACTIONS = ['HOLD', 'SWITCH']` → index 0 = HOLD, 1 = SWITCH, `ACTION_SIZE = 2`.
+`actionToIntent(i)`가 인덱스를 `SignalIntent`로, `intentToAction(intent)`가 역매핑한다. 이 순서는 Q-output 헤드와
+replay buffer가 의존하는 계약이므로 바꾸면 D-016과 모델/버퍼 fixture를 함께 갱신한다. agent는 색/yellow를 직접
+정하지 않으며 min-green·yellow는 환경(`applySignalIntent`)이 강제한다(Q4, D-008).
+
+## Reward — M4 (D-017)
+
+shared DQN의 per-step reward는 학습 신호이지 집계 metric이 아니다(`metricVersion` 무관, observation/pressure와 같은
+범주). **per-intersection local reward = 그 교차로로 들어오는 모든 approach edge의 Q2 큐 합의 음수**다:
+`reward(I) = −Σ_{e.to==I} queue(e)`. 항상 ≤ 0, 혼잡이 덜할수록 0에 가깝다. 정의는 `src/rl/reward.ts`가 소유하며
+`queueLengthsByEdge`(Q2)와 approach index를 재사용한다. reward 스케일링/클리핑은 학습 하이퍼파라미터(M4.6) 소관으로
+정의(raw 음의 큐)와 분리한다. reward 정의를 바꾸면 D-017과 학습/평가 결과를 함께 갱신한다.
+
+## Replay transition — M4 (D-017)
+
+replay buffer가 저장하는 transition은 학습용 read model이다:
+`{ obs: number[], action: number, reward: number, nextObs: number[], done: boolean }`. `obs`/`nextObs`는 인코딩된
+관측(길이 `OBSERVATION_SIZE`, D-015), `action`은 `[0, ACTION_SIZE)` 인덱스(D-016), `reward`는 위 정의다. 버퍼는
+capacity 고정 ring이며 오래된 항목을 덮어쓰고, 샘플링은 프로젝트 seeded RNG(`RandomSource`)로 결정론적이다. 저장은
+비침습적이라 simulation 궤적/`summary()`에 영향이 없다.
