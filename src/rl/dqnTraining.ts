@@ -1,4 +1,5 @@
 import { TICK_SEC } from '../simulation/constants'
+import { runScenario } from '../simulation/compareControllers'
 import { buildApproachIndex } from '../simulation/pressure'
 import { buildRoadGraph } from '../simulation/roadGraph'
 import { createSeededRandom } from '../simulation/seededRandom'
@@ -36,6 +37,30 @@ export function evaluateDqn(model: DqnModel, scenario: Scenario): RunSummary {
   })
   engine.runTicks(ticksFor(scenario))
   return engine.summary()
+}
+
+export interface BaselineEval {
+  seed: number
+  dqn: RunSummary
+  fixed: RunSummary
+}
+
+/**
+ * Repeated-seed baseline evaluation (M4.10): for each eval seed, run the trained
+ * DQN (greedy) and the Fixed baseline on the same scenario/seed (common random
+ * numbers, D-006) and return both summaries side by side. Callers should use eval
+ * seeds disjoint from training seeds (TEST_STRATEGY) and report the numbers as
+ * measured — improvement, regression, or trade-off all kept (R2).
+ */
+export function evaluateDqnVsFixed(
+  model: DqnModel,
+  scenario: Scenario,
+  evalSeeds: readonly number[],
+): BaselineEval[] {
+  return evalSeeds.map((seed) => {
+    const scen: Scenario = { ...scenario, seed }
+    return { seed, dqn: evaluateDqn(model, scen), fixed: runScenario(scen, 'fixed') }
+  })
 }
 
 export interface TrainConfig {

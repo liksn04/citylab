@@ -32,7 +32,12 @@ Landed:
   Q-network for the DqnController seam.
 - `dqnTraining.ts` — M4.9 evaluateDqn (greedy engine run → RunSummary,
   deterministic) and trainDqn (episode rollout + replay learning, train/eval seed
-  separation). The engine takes an injected DqnController; it never imports rl.
+  separation); M4.10 evaluateDqnVsFixed (repeated-seed DQN-vs-Fixed comparison).
+  The engine takes an injected DqnController; it never imports rl.
 
-Still gated: repeated-seed evaluation vs the Fixed baseline (M4.10). Keep
-min-green and yellow environment-owned via `signalMachine`.
+M4.1–M4.10 implemented. M4.10 measured result (docs/PROGRESS.md): the DQN cuts
+avg/p95 waiting vs Fixed but regresses throughput/max-queue via over-switching
+(R2 trade-off), so the "improvement vs Fixed" exit criterion is only partially
+met and M4 stays active pending a reward/training decision. Keep min-green and
+yellow environment-owned via `signalMachine`; changing the reward (D-017) needs a
+new ADR.

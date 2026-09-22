@@ -1,5 +1,70 @@
 # Progress Log
 
+## 2026-09-22 — M4.10 baseline evaluation (DQN vs Fixed) — MIXED result (R2), M4 NOT advanced
+
+### Session objective
+M4.10: 실제 `trainDqn`로 학습 후 **train과 분리된 eval seed set**에서 반복 evaluate하여 Fixed baseline과 비교하고,
+실제 run 숫자를 있는 그대로 기록한다(개선/열세/트레이드오프 모두, R2). 그 후 M4 exit criteria 재평가.
+
+### Completed (machinery)
+- `src/rl/dqnTraining.ts`: `evaluateDqnVsFixed(model, scenario, evalSeeds)` — eval seed마다 DQN(greedy)와 Fixed를 동일
+  scenario/seed(공통 난수, D-006)로 돌려 두 summary를 나란히 반환.
+- `src/rl/dqnBaseline.test.ts`(1): 비교 harness 검증(train→eval, eval seed가 train과 disjoint, 두 컨트롤러 유효 summary·
+  동일 demand). **승패는 단언하지 않음**(학습 초기화가 확률적, R8 → 정확한 숫자는 fixture로 고정하지 않음).
+
+### 실제 측정 결과 (있는 그대로, R2 — balanced-4x4-v1, 24 episodes ~13s 학습, eval seeds 51001/51002/51003 = train 41021..41026과 disjoint)
+| 지표 | DQN(greedy) | Fixed | 판정 |
+|---|---:|---:|---|
+| avg wait | **4.73s** | 12.19s | DQN 개선(−61%) |
+| p95 wait | **17.2s** | 38.2s | DQN 개선(−55%) |
+| throughput(완료) | 399 | **587** | **DQN 열세(−32%)** |
+| max queue | 6 | **4** | DQN 열세 |
+| signal switches | 2963 | 1248 | DQN 과다 스위칭 |
+- 3개 eval seed 모두 방향 일관(DQN avgWait 4.2~5.4s vs Fixed ~12.1~12.3s; throughput 일관 열세).
+- **해석(R2):** DQN은 대기시간(avg·p95)을 크게 낮추지만 **처리량이 32% 하락**한다. 과도한 스위칭(2963회)이 yellow 손실을
+  키워 네트워크 방출을 떨어뜨리고(완료 399 vs 생성 ~600 → 미완료 다수), avgWait가 낮은 것은 부분적으로 **완료 차량이
+  적기 때문**일 수 있다. 이는 RISK_REGISTER R2("평균만 개선, 일부 starvation")가 경고한 트레이드오프다.
+- 학습 파이프라인은 정상 작동(loss 유한, transition 879k 수집, leak 0). 재현성: 가중치 초기화가 확률적(R8)이라 정확한
+  숫자는 run마다 변하나 **방향(대기↓/처리량↓)은 견고**.
+
+### M4 Exit Criteria 재평가
+- [x] 학습 루프가 main UI thread를 장시간 block하지 않음 — worker 프로토콜(M4.7) 청크 학습(아키텍처 충족; UI 라이브
+  배선은 M5/M6).
+- [x] tensor leak 검사 — 전 파이프라인 leak 0(qNetwork/dqnUpdate/trainingProtocol/trainDqn 테스트).
+- [x] seed가 evaluation에서 고정 — `evaluateDqn` 결정론(테스트).
+- [x] training seed와 evaluation seed 분리 — harness+테스트로 강제(train 41021.. vs eval 51001..).
+- [x] model snapshot 저장/로드 — M4.8 예측 parity.
+- [~] **최소 한 제공 scenario에서 Fixed 대비 반복 evaluation 개선 — 부분 충족/트레이드오프.** 대기(avg·p95)는 반복
+  eval에서 일관 개선하나 throughput/maxQueue는 열세. **깨끗한 개선(도미네이션) 아님.**
+- [x] 실패/열세도 숨기지 않고 기록 — 위 표·해석에 그대로 기록.
+
+### Milestone decision — M4 유지(전진 안 함)
+- exit criterion "Fixed 대비 개선"이 **트레이드오프(처리량 32% 열세)**라 깨끗이 충족되지 않음. AI_AGENT_GUIDE(에이전트가
+  스스로 "대충 됐다"며 전진 금지) + R2에 따라 **M4를 `active`로 유지**하고 gap을 기록한다. 전진 여부/개선 방향은 사용자
+  결정 사항(아래 옵션).
+- 개선 옵션(사용자 승인 필요): (a) reward에 스위칭/미완료 페널티 또는 처리량 항 추가 → **D-017 변경 = 새 ADR**(보상 의미
+  변경) 후 재학습; (b) 더 긴 학습/하이퍼파라미터 튜닝(단, 순수 -queue reward의 구조적 과다 스위칭 유인은 남을 수 있음);
+  (c) 대기 개선을 근거로 criterion 6를 충족으로 보고 M5 전진(throughput 회귀는 known limitation으로 이월).
+
+### 금지/보존
+- reward 정의(D-017) 미변경(트레이드오프 확인만; 변경 시 ADR). golden/`metricVersion`/`summary()` 불변. UI 배선 없음.
+
+### Tests actually run
+- `npm run check` → PASS (42 files, **274 tests**; 이전 273 + 신규 1). session ✓, tokens ✓, build ✓.
+- 별도 full 학습·비교 run(24 ep) 1회 실행 → 위 표(committed 테스트는 승패 비단언 fast 버전).
+
+### Next exact actions
+1. 사용자 결정 대기: 위 (a)/(b)/(c) 중 택1.
+   - (a) 선택 시: `docs/DECISIONS.md`에 reward 변경 ADR 기록 후 D-017 개정 → 재학습 → 재평가.
+   - (c) 선택 시: AI_AGENT_GUIDE Milestone advancement protocol로 M4 done/M5 active 전진(throughput 회귀를
+     RISK/PROGRESS에 known limitation으로 명시).
+2. (범위 밖) M5: analytics에서 이 비교를 실제 run 데이터로 시각화(하드코딩 금지).
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.10 구현 완료; exit criterion 6 트레이드오프로 milestone 전진 보류).
+
+---
+
 ## 2026-09-22 — M4.9 DQN engine wiring + evaluation/training runner
 
 ### Session objective
