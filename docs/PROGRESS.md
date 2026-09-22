@@ -1,5 +1,96 @@
 # Progress Log
 
+## 2026-09-22 — M4 CLOSEOUT / M5 ACTIVATION
+
+### Session objective
+M4를 공식 종료하고 M5 — Analytics & Neural Inspection을 활성화한다. 새 M5 기능은 구현하지 않는다. (1) 7개 M4 exit
+criteria를 실제 코드·테스트 증거로 재검증, (2) 문서·machine-readable status를 실제 구현 상태와 동기화, (3) M5에서
+혼동/런타임 오류를 낳을 API 불일치(runExperiment의 dqn over-promise)를 최소 정리한다.
+
+### Completed
+- M4 Exit Criterion 1 (학습 루프 non-blocking): worker training boundary — `src/workers/trainingProtocol.ts`(순수
+  `TrainingSession`) + `trainingWorker.ts`(얇은 glue), 청크 학습 + progress/loss 보고, leak 0(`trainingProtocol.test`).
+  단, `trainDqn()`/`evaluateDqn()`은 **headless 유틸리티**이며 아직 React 학습 UI/live worker에 배선되지 않음(경계 수준 충족).
+- M4 Exit Criterion 2 (tensor leak): `qNetwork`/`dqnUpdate`/`modelStorage`/`trainingProtocol`/`dqnTraining` 테스트에서
+  `tf.memory().numTensors` 전후 동일(총 5개 파일).
+- M4 Exit Criterion 3 (eval seed 고정): `evaluateDqn(model, scenario)` greedy(ε=0) 결정론 — `toEqual` 테스트.
+- M4 Exit Criterion 4 (train/eval seed 분리): `trainDqn(trainSeeds)` vs `evaluateDqnVsFixed(evalSeeds)`, `dqnBaseline.test`가
+  eval∩train=∅ 강제. 측정 run은 train 41021.. / eval 51001...
+- M4 Exit Criterion 5 (model snapshot): `src/rl/modelStorage.ts` — tf.io `ModelArtifacts` 직렬화/로드, **bit-identical
+  prediction parity** 테스트. IndexedDB/user-facing model-library workflow는 아직 아님.
+- M4 Exit Criterion 6 (Fixed 대비 반복 eval 개선): `balanced-4x4-v1` 4개 disjoint eval seed에서 모든 지표 개선(아래 측정표).
+  committed 테스트는 승패 비단언(초기화 확률적, R8).
+- M4 Exit Criterion 7 (실패 기록): 직전 gamma 0.95 MIXED 결과(throughput −32%, 과다 스위칭)를 그대로 보존(아래 두 번째 세션 항목).
+- API cleanup: `runExperiment`/`SeedRun`/`ExperimentResult`를 `BaselineControllerKind = Exclude<ControllerKind,'dqn'>`
+  (`fixed`|`maxpressure`)로 제한. baseline seed-set 러너가 실행 불가능한 'dqn' 비교를 타입으로 광고하지 않게 함('dqn'은
+  주입된 학습 모델 필요, D-021). `runExperiment.test`에 `@ts-expect-error` 회귀 가드 추가(→ `tsc -b`가 강제).
+- Stale copy: `src/app/App.tsx` `M4 active · training not built yet` → 중립 `Live simulation · Fixed baseline`(화면이
+  실제로 보여주는 것 = Fixed 엔진). README를 M0–M4 done / M5 active로 갱신.
+- Status: `project-status.json` M4 `done`/M5 `active`, `activeMilestone`=M5, M4 gate fields 7개 추가.
+  `docs/MILESTONES.md` M4 DONE(7개 [x])/M5 ACTIVE.
+- M4 → done, M5 → active.
+
+### Measured M4 evidence (있는 그대로)
+- scenario: `balanced-4x4-v1` (rows/cols 4, seed base 41021, 1200 vph, 1800s)
+- training seeds: 41021..41028 (train set), evaluation seeds: 51001..51004 (disjoint)
+- episodes: 60 (~53s 학습), trainStepsPerEpisode 200
+- key hyperparameters (변경 없음): gamma 0.99, DQN_HIDDEN_UNITS 64, lr 1e-3(Adam), batch 64, buffer 50k, targetSync 500,
+  epsilon end 0.02, reward = D-017 raw 음의 큐(불변)
+- DQN(greedy): avgWait **2.64s**, p95 **9.5s**, throughput **591**, maxQueue **2.25**, switches **341**
+- Fixed: avgWait 12.20s, p95 37.5s, throughput 588, maxQueue 4.25, switches 1248
+- known failed/mixed result reference: 2026-09-22 gamma-0.95 MIXED(throughput −32%, over-switching 2963) — 아래 항목에 보존.
+
+### Optional robustness smoke — rush-4x4-v1 (M4 게이트와 무관, 삭제하지 않는 balanced를 대체하지 않음)
+M4 최종 model/하이퍼파라미터(gamma 0.99, hidden 64, reward D-017 불변; 튜닝 없음)를 rush(2×demand, 2400 vph)에서
+train seeds 73019..73026 / **분리된** eval seeds 83001..83004로 1회 학습·평가(throwaway 측정, 커밋 안 함; ~56s, 3.10M
+transitions, 12000 loss steps). 있는 그대로:
+| 지표 | DQN(greedy) mean | Fixed mean | 판정 |
+|---|---:|---:|---|
+| avg wait | 3.63s | 13.49s | 개선 −73% |
+| p95 wait | 12.5s | 39.75s | 개선 −69% |
+| throughput(완료) | 1181.3 | 1172.8 | 동등+ |
+| max queue | 4 | 6 | 개선 |
+| signal switches | 660 | 1248 | 개선 |
+- 4개 eval seed 전부 방향 일관(DQN avg 3.4~4.0s vs Fixed 12.8~14.1s; throughput 1180~1182 vs 1171~1175). rush에서도
+  **트레이드오프 없이** DQN이 모든 지표 개선 → M5 결과 해석 시 generalization 범위가 balanced에 국한되지 않음을 시사.
+  이는 M4 게이트 재판정이 아니라 정보성 관측이며, 초기화 확률적(R8)이라 정확 수치는 run마다 변한다.
+
+### Tests actually run
+- `npm run test` → PASS (42 files, 275 tests; 이전 274 + runExperiment 회귀 1). throwaway rush smoke는 실행 후 삭제.
+- `npm run build` → PASS (`tsc -b` + vite; `@ts-expect-error` 회귀가 tsc에서 소비됨 = dqn 타입 거부 확인).
+- `npm run check` → PASS (session:check active **M5**, tokens ✓, test ✓, build ✓).
+- `npm run session:close` → PASS.
+
+### Known limitations (entering M5 — 숨기지 않음)
+- DQN weight initialization / TFJS backend까지 완전히 deterministic한 것은 아니다(R8). simulation determinism과 training
+  stochasticity는 구분된다 — 재현성은 eval seed 분리로 확보하고, 정확 수치가 아니라 방향이 견고하다.
+- worker training protocol(D-020)은 존재하지만 현재 React 앱 학습 UI/live worker와 완전히 배선된 상태는 아니다.
+- model serialization(tf.io ModelArtifacts, D-없음/M4.8)은 존재하지만 완전한 user-facing model library workflow(IndexedDB
+  저장/목록/로드 UI)는 아직 아니다.
+- 3-controller(Fixed/MaxPressure/trained-DQN) 비교 data model은 M5.1이며, DQN 평가는 학습 모델이 필요해 baseline
+  `runExperiment()`에 끼워 넣지 않는다(별도 계약).
+
+### 금지/보존 준수
+- reward D-017, observation 4-vector + `HOLD|SWITCH` action 계약, gamma 0.99, DQN_HIDDEN_UNITS 64, learning rate, Fixed
+  golden fixture, m2 comparison fixture, METRIC_VERSION, tick/queue/wait 의미, traffic physics, MaxPressure **전부 불변**.
+  하이퍼파라미터/보상 추가 튜닝 없음. 이전 MIXED 실패 결과 보존. 새 M5 chart/dashboard/heatmap/neural inspector 미구현.
+
+### Next exact actions (M5)
+1. M5.1 comparison data model: Fixed/MaxPressure/trained-DQN을 하나의 comparison read model로. DQN은 학습 모델(주입
+   컨트롤러)이 필요하므로 baseline `runExperiment()`/`BaselineControllerKind` 경로에 억지로 넣지 말고 별도 계약 설계
+   (DQN provenance 포함; model weights를 기존 configHash에 넣지 않음 — R8/D-021).
+2. M5.2 avg wait/throughput 시각화 — 실제 raw/sample/run 데이터만, 동일 scale.
+3. M5.3 P95/max queue/starvation view — R2를 시각적으로 확인 가능하게.
+4. M5.4 congestion heatmap — engine-derived data만.
+5. M5.5 run provenance inspector — scenario/scenarioVersion/controller/seed/configHash/metricVersion/train·eval seed 분리.
+6. M5.6 neural inspection — observation input/activation/Q output만 표현("AI가 왜 판단했는지 설명" 금지, charter non-goal).
+7. M5.7 keyboard/touch inspection path + M5 a11y exit(reduced motion / reduced transparency fallback).
+
+### Active milestone
+M5 — Analytics & Neural Inspection (활성화됨; M4 done). M5 기능 자체는 아직 미구현.
+
+---
+
 ## 2026-09-22 — M4.10 tuning — CLEAN win over Fixed (all 7 M4 exit criteria met)
 
 ### Session objective

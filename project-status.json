@@ -1,15 +1,15 @@
 {
   "project": "Neural City Lab",
   "version": "0.1.0",
-  "activeMilestone": "M4",
-  "activeMilestoneTitle": "Shared DQN Training",
+  "activeMilestone": "M5",
+  "activeMilestoneTitle": "Analytics & Neural Inspection",
   "milestoneStatus": {
     "M0": "done",
     "M1": "done",
     "M2": "done",
     "M3": "done",
-    "M4": "active",
-    "M5": "locked",
+    "M4": "done",
+    "M5": "active",
     "M6": "locked"
   },
   "gates": {
@@ -32,7 +32,14 @@
     "M3_configHashPersisted": true,
     "M3_metricVersionPersisted": true,
     "M3_rawVsAggregateSeparated": true,
-    "M3_reanalyzableExport": true
+    "M3_reanalyzableExport": true,
+    "M4_nonBlockingTrainingBoundary": true,
+    "M4_tensorLeakChecked": true,
+    "M4_fixedEvaluationSeed": true,
+    "M4_trainEvalSeedSeparation": true,
+    "M4_modelSnapshotSaveLoad": true,
+    "M4_fixedBaselineImprovement": true,
+    "M4_failureRecordPreserved": true
   },
   "lockedUntil": {
     "maxPressure": "M2",
@@ -46,13 +53,15 @@
   },
   "lastSession": {
     "date": "2026-09-22",
-    "summary": "M4.10 tuning — CLEAN win over Fixed; all 7 M4 exit criteria met (advance pending user OK). User chose 'more training/tuning' (reward D-017 UNCHANGED, no new ADR). Tuned: gamma 0.95->0.99 (removes myopic over-switching), DQN_HIDDEN_UNITS 32->64, episodes 24->60, batch 32->64, buffer 20k->50k, targetSync 200->500, epsilon end 0.05->0.02; baked the working values into DEFAULT_DQN_HYPERPARAMS.gamma and DQN_HIDDEN_UNITS (D-018/D-019 noted). MEASURED (balanced-4x4-v1, 60 episodes ~53s, eval seeds 51001-51004 disjoint from train 41021..41028): DQN avgWait 2.64s vs Fixed 12.20s (-78%), p95 9.5 vs 37.5 (-75%), throughput 591 vs 588 (equal+, regression GONE), maxQueue 2.25 vs 4.25, switches 341 vs 1248 — DQN dominates ALL metrics across all 4 eval seeds. gamma up penalized switching->yellow->future-queue, so switches collapsed to 341. Prior MIXED result kept in PROGRESS as the failure record (R2). All exit criteria now MET: non-blocking (M4.7), tensor-leak-0, eval seed fixed, train/eval seed separation, model snapshot (M4.8), improvement vs Fixed (clean), failures recorded. npm run check PASS (42 files, 274 tests, build ok; default changes re-verified). golden/metricVersion unchanged. Milestone kept ACTIVE this session — advancement is the user's call (their choice was 'tune', not 'advance').",
+    "summary": "M4 CLOSEOUT + M5 ACTIVATION. Re-verified all 7 M4 exit criteria against code+tests, then advanced M4->done / M5->active (AI_AGENT_GUIDE Milestone advancement protocol). Evidence: (1) non-blocking training boundary — worker protocol (trainingProtocol.ts pure TrainingSession + trainingWorker.ts glue), chunked train + progress/loss, leak 0; trainDqn/evaluateDqn are HEADLESS utils, NOT wired into a React training UI or a live worker yet. (2) tensor leak — tf.memory().numTensors flat across qNetwork/dqnUpdate/modelStorage/trainingProtocol/dqnTraining tests. (3) fixed eval seed — evaluateDqn greedy(eps=0) determinism (toEqual). (4) train/eval seed separation — trainDqn(trainSeeds) vs evaluateDqnVsFixed(evalSeeds); dqnBaseline.test asserts disjoint; measured train 41021.. / eval 51001... (5) model snapshot — modelStorage.ts tf.io ModelArtifacts serialize/load with bit-identical prediction parity (NOT an IndexedDB/user-facing model-library workflow). (6) Fixed improvement — balanced-4x4-v1 measured clean win across 4 disjoint eval seeds (avg 2.64 vs 12.20, p95 9.5 vs 37.5, throughput 591 vs 588, maxQueue 2.25 vs 4.25, switches 341 vs 1248); committed tests do NOT assert a winner (stochastic init, R8). (7) failure preserved — prior gamma-0.95 MIXED result (throughput -32%, over-switching) kept in PROGRESS as R2 evidence. API cleanup: runExperiment/SeedRun/ExperimentResult now typed to BaselineControllerKind = Exclude<ControllerKind,'dqn'> (fixed|maxpressure), so the baseline seed-set runner no longer advertises an unrunnable 'dqn' comparison ('dqn' needs an injected trained model, D-021); tsc -b enforces the @ts-expect-error regression in runExperiment.test. App.tsx stale 'M4 active - training not built yet' -> neutral 'Live simulation - Fixed baseline'. README updated to M0-M4 done / M5 active. UNCHANGED: reward D-017, observation 4-vector + HOLD|SWITCH action contracts, gamma 0.99, DQN_HIDDEN_UNITS 64, learning rate, golden Fixed / m2 fixtures, METRIC_VERSION, tick/queue/wait semantics, traffic physics, MaxPressure. No M5 feature implemented (analytics UI is the newly-active milestone).",
     "nextActions": [
-      "USER DECISION: advance M4? All 7 exit criteria are now met (clean Fixed-beating result). If yes: per AI_AGENT_GUIDE flip project-status M4->done / M5->active, record M4 gate evidence, keep the earlier MIXED run in PROGRESS as the failure record. If the user wants more robustness first, run additional seeds/scenarios (e.g., rush-4x4-v1) before advancing.",
-      "M5 (Analytics, locked until advanced) will visualize the DQN-vs-Fixed comparison from ACTUAL run data (no hardcoded numbers), showing provenance + train/eval seed separation.",
-      "Optional: verify the win also holds on rush-4x4-v1 (heavier demand) before/after advancing, recorded as measured (R2).",
-      "M4.7 training worker protocol (main<->worker messages, ARCHITECTURE boundary) -> M4.8 model save/load (prediction parity) -> M4.9 evaluation runner: wire DqnController into TrafficEngine (controllerKind 'dqn') + extend provenance/runConfig (D-010), train/eval seed separation (TEST_STRATEGY) -> M4.10 repeated-seed eval vs Fixed baseline; record failing scenarios too (R2).",
-      "If observation proves too weak with pressure-only, bump D-015 alt (c): include raw per-axis queue load, which requires extending the ObservationInput engine seam (ADR + observation/model fixtures).",
+      "M5.1 comparison data model: express Fixed / MaxPressure / trained-DQN results in ONE comparison read model, without recomputing metrics in chart code. NOTE: DQN evaluation needs a trained model (injected controller), so do NOT force it into the baseline runExperiment()/BaselineControllerKind path — design a separate contract that carries the trained-model comparison (and DQN provenance) alongside the baseline runs.",
+      "M5.2 avg-waiting-time / throughput visualization from actual raw/sample/run data only (no hardcoded numbers), same scale for comparison.",
+      "M5.3 P95 / max-queue / starvation view so R2 (avg improves but tail/starvation) is visible.",
+      "M5.4 congestion heatmap from engine-derived data only.",
+      "M5.5 run provenance inspector: scenario, scenarioVersion, controller, seed, configHash, metricVersion, train/eval seed separation. If DQN model/training provenance is needed, design it in M5.1 — do NOT stuff model weights into the existing configHash (non-deterministic/backend-dependent, R8/D-021).",
+      "M5.6 neural inspection: show observation input / activation / Q output only — no 'explains why the AI decided' framing (charter non-goal).",
+      "M5.7 keyboard/touch chart inspection path; plus M5 a11y exit criteria (reduced motion / reduced transparency fallback).",
       "ENV note (not a project change): npm install ERESOLVEs here (vitest@5 peerOptional @types/node ^22||>=24 vs root @types/node@20), dropping fake-indexeddb so dexieRunStore.test fails to load. Install with `npm install --legacy-peer-deps` to complete node_modules; no code/package.json change needed.",
       "M6.6 owns persistence migration tests across Dexie versions (v1->v2); no shipped data yet."
     ]

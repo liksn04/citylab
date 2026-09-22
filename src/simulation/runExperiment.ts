@@ -18,9 +18,21 @@ import type { ControllerKind, RunSummary } from './TrafficEngine'
  * there, not here (D-010).
  */
 
+/**
+ * Controller kinds this baseline runner can actually execute: every kind that
+ * runs from an `EngineConfig` alone, with no injected trained model. That is
+ * every `ControllerKind` except `'dqn'`, which requires an injected
+ * `DqnController` wrapping a trained network (D-021) — the runner reuses
+ * `runScenario`, which constructs the engine from config only and would throw
+ * for `'dqn'`. Constraining the runner's public contract to this subset keeps
+ * the types from advertising a DQN comparison the runner cannot perform; the
+ * trained-model comparison read model is M5.1 work.
+ */
+export type BaselineControllerKind = Exclude<ControllerKind, 'dqn'>
+
 export interface SeedRun {
   seed: number
-  controllerKind: ControllerKind
+  controllerKind: BaselineControllerKind
   provenance: RunProvenance
   summary: RunSummary
   /** Raw metric-sample time series (M3.4); present only when sampling was requested. */
@@ -32,7 +44,7 @@ export interface ExperimentResult {
   scenarioVersion: string
   /** The seed set every controller was evaluated over (comparison axis). */
   seeds: readonly number[]
-  controllers: readonly ControllerKind[]
+  controllers: readonly BaselineControllerKind[]
   /** One run per (seed, controller), grouped seed-major then controller order. */
   runs: SeedRun[]
 }
@@ -49,7 +61,7 @@ export interface ExperimentResult {
 export function runExperiment(
   scenario: Scenario,
   seeds: readonly number[],
-  kinds: readonly ControllerKind[] = ['fixed', 'maxpressure'],
+  kinds: readonly BaselineControllerKind[] = ['fixed', 'maxpressure'],
   sampleIntervalSec?: number,
 ): ExperimentResult {
   const runs: SeedRun[] = []
