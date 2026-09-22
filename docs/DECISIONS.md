@@ -526,3 +526,55 @@ DqnController)을 worker 안에서 돌려 transition을 생성하는 배선은 M
 순수 학습 조율). minibatch 샘플링은 seed 결정론이나 network 학습은 확률적(R8) — 재현성은 eval seed 분리(M4.9). 메시지
 스키마를 바꾸면 이 결정과 glue/consumer(M4.9)를 함께 갱신한다. 의존: `workers → rl → {simulation, tfjs}` — 금지된
 `simulation → {rl, workers}` 없음(ARCHITECTURE).
+
+## D-021 — DQN engine wiring, decision hook & training-transition semantics (M4.9)
+**Status:** accepted (M4)
+
+M4.9는 DQN을 `TrafficEngine`에서 실제로 구동하고(평가), 학습 transition을 생성한다. 세 부분을 결정한다.
+
+**(1) 엔진 배선 — controller 주입(simulation→rl 금지 준수).** `ControllerKind`에 `'dqn'`을 추가한다. 단, 엔진은
+`rl/DqnController`를 **import하지 않는다**(금지된 `simulation → rl`). 대신 `EngineConfig.injectedController?: Controller`
+(controllers/ 계약 타입)를 받아, `controllerKind==='dqn'`이면 주입된 controller를 쓰고 env 안전 설정은 adaptive와 동일
+(`minGreenSec=MIN_GREEN_SEC, yellowSec=YELLOW_SEC`)로 둔다. 주입 없이 'dqn'이면 예외. DQN controller(및 policy=모델)
+조립은 rl/runner 계층이 하고 엔진엔 계약만 넘긴다.
+
+**(2) read-only 결정 hook(golden 보존).** `EngineConfig.onDecisionTick?: (info) => void`를 추가한다. tick의 신호
+단계에서 이미 계산되는 값만 넘긴다: `{ tick, queueByEdge, decisions: [{ intersectionId, observation: ObservationInput,
+intent }] }`. **green(결정) 교차로만** 포함(yellow는 agent 결정 아님). hook은 순수 관찰이라 simulation 궤적/`summary()`에
+영향이 없고, **미제공 시 완전 무변화** → Fixed golden byte-identical(M3.4 샘플링과 동일 원칙). 넘기는 타입은 모두
+controllers/simulation 것 → 엔진에 rl 의존 없음.
+
+**(3) decision-point semi-MDP transition(사용자 승인 "권장 설계").** agent 결정은 green 시점에만 일어나므로 transition의
+`obs→nextObs`는 연속 tick이 아니라 **같은 교차로의 다음 green 결정**으로 잇는다. 보상은 그 간격(yellow 포함) 동안의
+**per-intersection queue reward(D-017) 누적**이다. 순수 `TransitionCollector`(`src/rl/transitionBuilder.ts`)가 매 tick
+`queueByEdge`로 각 pending 결정의 보상을 누적하고, 교차로 I가 다음 결정을 하면 직전 pending을 `{obs, action, reward=누적,
+nextObs=새 obs, done:false}`로 완료·push한 뒤 새 pending을 연다. episode 끝에서 남은 pending은 `done:true`로 완료
+(nextObs=마지막 obs). 보상 구간은 결정 tick t에 대해 (t, t'] (다음 결정 t'까지, t'의 큐 상태 = a_t의 결과를 포함) — 결정
+tick 자신의 큐는 직전 action의 결과라 직전 pending에 credit. action은 `intentToAction`(D-016).
+
+**(4) provenance/runConfig 확장.** `CONTROLLER_IDS.dqn = 'dqn-v1'`. `canonicalizeRunConfig`는 'dqn'을 adaptive로
+취급(maxpressure와 동일: greenSec=null, yellowSec=YELLOW_SEC, minGreenSec=MIN_GREEN_SEC) → dqn run도 configHash/
+provenance를 가진다(D-010). 모델 가중치는 configHash에 넣지 않는다(비결정·backend 의존, R8; run 정체성은 조건이지
+학습된 파라미터가 아님).
+
+**(5) train/eval seed 분리(TEST_STRATEGY).** 학습은 train seed set, 평가는 **분리된 eval seed set**에서 **greedy(ε=0)**로
+한다. 단일 seed 호성적을 성능으로 취급하지 않는다. eval은 고정 모델·고정 seed에서 결정론적(`evaluateDqn(model, scenario)`
+반복 시 동일 summary).
+
+**Reason:** controller 주입은 유일하게 `simulation→rl`을 피하면서 DQN을 엔진에 태우는 방법이다. read-only hook은 golden을
+지키며 transition 원자료를 준다. decision-point 누적 보상은 HOLD|SWITCH가 green에서만 일어나고 yellow가 강제되는 본
+환경의 올바른 credit 구조다(R1: 잘못된 credit은 학습 버그). 모델을 configHash에서 제외하는 것은 R8(결정론 조건 vs 확률적
+학습 분리).
+
+**Alternatives considered:**
+- (a) 엔진이 DqnController를 직접 생성 — `simulation→rl` 위반. 주입으로 회피.
+- (b) 연속 tick one-step transition(yellow tick에 dummy action) — env 강제 yellow를 agent action으로 오인, credit 왜곡.
+  decision-point 채택.
+- (c) 보상 미누적(다음 결정 시점 순간값만) — 긴 phase의 중간 혼잡을 놓침. 누적 채택(간단·정확 절충).
+- (d) 엔진 tick 내부에 transition push를 심음 — 결정성/golden 위험. read-only hook + 외부 순수 collector로 분리.
+- (e) configHash에 모델 해시 포함 — 비결정·backend 의존이라 재현 조건 해시 오염. 제외.
+
+**Determinism/metric impact:** 보고 metric·`metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(hook 미제공 시
+엔진 무변화; goldenRun 테스트로 가드). 학습은 확률적(R8) — 재현성은 eval seed 분리로. transition 의미(누적 구간/보상)를
+바꾸면 이 결정과 학습/평가 결과를 함께 갱신한다. 의존: `rl/runner → {simulation, controllers, tfjs}`, `simulation`은
+controllers 계약만(주입) — 금지된 `simulation → rl` 없음(ARCHITECTURE).

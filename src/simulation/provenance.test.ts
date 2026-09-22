@@ -33,7 +33,7 @@ describe('M3.1/M3.2 — run provenance', () => {
   })
 
   it('maps controllerKind to a stable controllerId', () => {
-    expect(CONTROLLER_IDS).toEqual({ fixed: 'fixed-v1', maxpressure: 'maxpressure-v1' })
+    expect(CONTROLLER_IDS).toEqual({ fixed: 'fixed-v1', maxpressure: 'maxpressure-v1', dqn: 'dqn-v1' })
     expect(buildRunProvenance(BALANCED_4X4_V1, 'maxpressure').controllerId).toBe('maxpressure-v1')
   })
 

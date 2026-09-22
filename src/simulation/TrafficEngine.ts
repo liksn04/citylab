@@ -1,4 +1,4 @@
-import type { Controller, ObservationInput } from '../controllers/Controller'
+import type { Controller, ObservationInput, SignalIntent } from '../controllers/Controller'
 import { FixedTimeController, type FixedControllerConfig } from '../controllers/FixedTimeController'
 import { MaxPressureController } from '../controllers/MaxPressureController'
 import type { MetricSample } from '../analytics/metricSamples'
@@ -15,7 +15,23 @@ import { createFixedStepAccumulator } from './time'
 import type { IntersectionState, RoadGraph } from './types'
 import { createVehicle, currentEdge, stepVehicle, type Vehicle, type VehicleStatus } from './vehicle'
 
-export type ControllerKind = 'fixed' | 'maxpressure'
+export type ControllerKind = 'fixed' | 'maxpressure' | 'dqn'
+
+/** One green (agent) decision emitted by the read-only decision hook (M4.9, D-021). */
+export interface DecisionEmission {
+  intersectionId: string
+  observation: ObservationInput
+  intent: SignalIntent
+}
+
+/** Per-tick read-only view for training transition capture (M4.9, D-021). */
+export interface DecisionTickInfo {
+  tick: number
+  /** Start-of-tick approach-edge queue counts (same map used for pressure). */
+  queueByEdge: ReadonlyMap<string, number>
+  /** Green decisions this tick (yellow intersections are excluded — no agent choice). */
+  decisions: readonly DecisionEmission[]
+}
 
 export interface EngineConfig {
   rows: number
@@ -28,6 +44,17 @@ export interface EngineConfig {
   controller?: FixedControllerConfig
   /** Which signal controller drives the run. Defaults to the fixed-time baseline. */
   controllerKind?: ControllerKind
+  /**
+   * Controller instance for `controllerKind: 'dqn'`. Injected (never imported) so
+   * `simulation/` keeps no dependency on `rl/` (ARCHITECTURE, D-021).
+   */
+  injectedController?: Controller
+  /**
+   * Read-only per-tick hook for training-transition capture (D-021). Observes the
+   * green decisions already computed this tick; never mutates state. When omitted
+   * the engine behaves byte-identically (Fixed golden preserved).
+   */
+  onDecisionTick?: (info: DecisionTickInfo) => void
 }
 
 export interface CompletedTrip {
@@ -120,7 +147,13 @@ export class TrafficEngine {
     this.config = config
     this.graph = buildRoadGraph(config.rows, config.cols)
     this.approachIndex = buildApproachIndex(this.graph)
-    if (config.controllerKind === 'maxpressure') {
+    if (config.controllerKind === 'dqn') {
+      if (!config.injectedController) {
+        throw new Error("EngineConfig.controllerKind 'dqn' requires an injectedController (D-021)")
+      }
+      this.controller = config.injectedController
+      this.envSignalConfig = { minGreenSec: MIN_GREEN_SEC, yellowSec: YELLOW_SEC }
+    } else if (config.controllerKind === 'maxpressure') {
       this.controller = new MaxPressureController()
       this.envSignalConfig = { minGreenSec: MIN_GREEN_SEC, yellowSec: YELLOW_SEC }
     } else {
@@ -200,15 +233,20 @@ export class TrafficEngine {
     //    Pressure reads start-of-tick queues, before vehicles move this tick.
     const queueByEdge = queueLengthsByEdge(this.vehicles)
     const pressureMap = computePressure(this.approachIndex, queueByEdge)
+    const decisions: DecisionEmission[] | null = this.config.onDecisionTick ? [] : null
     this.intersections = this.intersections.map((node) => {
       const base = buildObservationInput(node, TICK_SEC, this.envSignalConfig)
       const input: ObservationInput = { ...base, pressure: pressureMap.get(node.id) ?? { NS: 0, EW: 0 } }
-      const intent = node.phase === 'YELLOW' ? 'HOLD' : this.controller.decide(this.controller.observe(input))
+      const green = node.phase !== 'YELLOW'
+      const intent = green ? this.controller.decide(this.controller.observe(input)) : 'HOLD'
+      // Read-only capture of the agent's green decisions for training (D-021).
+      if (decisions && green) decisions.push({ intersectionId: node.id, observation: input, intent })
       const { state, didSwitch } = applySignalIntent(node, TICK_SEC, intent, this.envSignalConfig)
       if (didSwitch) this.signalSwitches += 1
       return state
     })
     this.intersectionById = new Map(this.intersections.map((n) => [n.id, n]))
+    if (decisions) this.config.onDecisionTick!({ tick: this.currentTick, queueByEdge, decisions })
 
     // 2. Move due trips into the spawn backlog (preserves generation order).
     while (this.nextTripIndex < this.trips.length && this.trips[this.nextTripIndex]!.spawnTick <= this.currentTick) {

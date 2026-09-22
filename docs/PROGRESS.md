@@ -1,5 +1,62 @@
 # Progress Log
 
+## 2026-09-22 — M4.9 DQN engine wiring + evaluation/training runner
+
+### Session objective
+M4.9: DQN을 `TrafficEngine`에서 실제 구동(평가)하고, decision-point transition을 생성해 학습 루프를 구성한다.
+train/eval seed 분리. golden Fixed는 byte-identical 보존. (사용자 승인: 권장 설계로 자율 진행.)
+
+### Pre-code contract check (Phase C)
+- 엔진 배선(controller 주입/결정 hook) + transition/보상 credit 의미 = 아키텍처+decision-semantics → 코딩 전
+  `docs/DECISIONS.md` **D-021** 기록.
+
+### Completed
+- `docs/DECISIONS.md` **D-021**: controller 주입(엔진이 rl 미import), read-only 결정 hook(golden 보존), decision-point
+  semi-MDP transition(다음 green 결정까지 per-intersection 큐보상 누적), dqn provenance/runConfig(adaptive), model은
+  configHash 제외(R8), train/eval seed 분리. 대안 5개.
+- `src/simulation/TrafficEngine.ts`: `ControllerKind += 'dqn'`; `EngineConfig.injectedController?: Controller`(주입) +
+  `onDecisionTick?`(read-only, green 결정만 방출) + `DecisionTickInfo`/`DecisionEmission` 타입. 'dqn'은 주입 필수(없으면
+  예외), env는 adaptive 안전설정. hook 미제공 시 완전 무변화(golden 보존).
+- `src/simulation/runConfig.ts`: 'dqn'을 adaptive로(greenSec null, minGreenSec MIN_GREEN). `src/simulation/provenance.ts`:
+  `CONTROLLER_IDS.dqn='dqn-v1'`.
+- `src/rl/transitionBuilder.ts`: 순수 `TransitionCollector`(approachIndex) — 매 tick 큐보상 누적, 다음 결정에서 직전
+  transition을 `{obs,action,reward=누적,nextObs,done}`로 완료, `finish()`는 done 종료.
+- `src/rl/dqnPolicy.ts`: `greedyPolicy`(argmax) + `epsilonGreedyPolicy`(step별 epsilon anneal, seed 결정론).
+- `src/rl/dqnTraining.ts`: `evaluateDqn(model, scenario)`(greedy 엔진 run → RunSummary, 결정론) + `trainDqn(config)`
+  (episode 롤아웃 → onDecisionTick로 transition 수집 → replay 학습, target sync, epsilon 감쇠; train seed set 순환).
+- 테스트(+17): `transitionBuilder.test.ts`(4, 누적/nextObs 체이닝 손계산·결정tick 미credit·다교차로), `dqnPolicy.test.ts`(3),
+  `dqnTraining.test.ts`(5, eval 결정성/유효 summary, train 유한 loss·transition>0·leak0·eval seed 분리),
+  `dqnWiring.test.ts`(6, dqn 주입 필수/hook green-only/provenance·configHash 구분). `provenance.test.ts` 기대값에 dqn 추가.
+
+### M4 Exit Criteria 진전
+- "학습 non-blocking"(worker, M4.7)·"tensor leak"(전 파이프라인 leak0)·"model snapshot"(M4.8)·"eval seed 고정/분리"
+  (evaluateDqn 결정론 + train/eval seed 분리) 충족. **남은 것: 실제 반복-eval에서 Fixed 대비 개선 확인 + 실패 기록
+  (M4.10).** milestone/게이트 변경 없음(M4 active).
+
+### 금지/보존
+- 엔진은 rl 미import(주입만); hook read-only → **golden Fixed byte-identical**(goldenRun.test 통과로 가드).
+  `summary()`/`metricVersion` 불변. UI 배선 없음.
+
+### Tests actually run
+- `npm run check` → PASS (41 files, **273 tests**; 이전 256 + 신규 17). session ✓, tokens ✓, build ✓.
+  (첫 실행 provenance.test 기대값 1건 실패 → dqn 반영으로 수정, 재실행 PASS.)
+
+### Known issue / env note
+- `npm install`은 `--legacy-peer-deps` 필요. 학습 성능: DqnController.decide가 교차로마다 predict(단건)라 긴 run은
+  느림 — M4.10 실제 학습은 규모를 현실적으로 잡고 결과를 있는 그대로 보고(개선 못하면 exit 미충족으로 남김, R2).
+
+### Next exact actions (M4 마지막)
+1. M4.10: 실제 `trainDqn`로 학습 후 **eval seed set(train과 분리)에서 반복 evaluateDqn** → Fixed baseline(runScenario
+   'fixed')와 avg/p95/throughput/maxQueue 비교를 **실제 run 숫자**로 산출·기록(개선/열세/실패 모두, R2). 결과는
+   `docs/PROGRESS.md`(및 필요시 fixture)에 있는 그대로.
+2. 그 후 M4 exit criteria 7개 재평가 → 전부 충족 시에만 AI_AGENT_GUIDE 절차로 M4 done/M5 active 전진; 하나라도 미충족
+   (특히 "Fixed 대비 개선")이면 milestone 유지하고 gap을 정확히 남김.
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.9 done; M4.10 남음).
+
+---
+
 ## 2026-09-22 — M4.8 model save/load (prediction parity)
 
 ### Session objective

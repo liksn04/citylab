@@ -25,8 +25,14 @@ Landed:
 - `modelStorage.ts` — M4.8 serialize/load a Q-network to portable in-memory
   tf.io artifacts with bit-identical prediction parity. (`predictQValues` in
   qNetwork.ts predicts from any loaded model.)
+- `transitionBuilder.ts` — M4.9 decision-point TransitionCollector (D-021): turns
+  the engine's read-only per-tick decision hook into DQN transitions with reward
+  accumulated between an intersection's consecutive green decisions. Pure.
+- `dqnPolicy.ts` — M4.9 greedy (eval) and epsilon-greedy (train) policies over a
+  Q-network for the DqnController seam.
+- `dqnTraining.ts` — M4.9 evaluateDqn (greedy engine run → RunSummary,
+  deterministic) and trainDqn (episode rollout + replay learning, train/eval seed
+  separation). The engine takes an injected DqnController; it never imports rl.
 
-Still gated to later M4 slices (do not pull forward): engine wiring
-(`controllerKind='dqn'`) + evaluation runner with train/eval seed separation
-(M4.9), and repeated-seed evaluation vs the Fixed baseline (M4.10). Keep
+Still gated: repeated-seed evaluation vs the Fixed baseline (M4.10). Keep
 min-green and yellow environment-owned via `signalMachine`.
