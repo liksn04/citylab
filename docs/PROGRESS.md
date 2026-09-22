@@ -1,5 +1,56 @@
 # Progress Log
 
+## 2026-09-22 — M4.6 DQN update step (TensorFlow.js; single gradient step)
+
+### Session objective
+M4.6: replay 미니배치에 대한 표준 DQN 1-스텝 gradient 업데이트(target bootstrap + Huber loss + Adam)를 구현하고
+loss 유한·학습 감소·**텐서 leak 0**을 검증한다. 학습 루프/worker/엔진 배선 없음.
+
+### Pre-code contract check (Phase C)
+- γ·learning rate·loss·reward 스케일 = **학습 하이퍼파라미터** → 코딩 전 `docs/DECISIONS.md` **D-019** 기록. 엔진
+  무배선이라 metric/`summary()`/golden 불변.
+
+### Completed
+- `docs/DECISIONS.md` **D-019**: `y = r + γ·maxₐ' Q_target(next)·(1−done)`(target net, no grad), `loss = Huber(y,
+  Q_online(obs)[action])`(선택 action만 one-hot 마스크), Adam(lr). `DEFAULT_DQN_HYPERPARAMS{γ=0.95, lr=1e-3}`,
+  reward는 D-017 raw(스케일 없음). batch size·target sync 주기는 학습 루프(M4.7/M4.9) 소관. 텐서 규율(tidy/minimize
+  반환 scalar만 dispose/입력 dispose/optimizer.dispose). vanilla DQN(Double는 후속). 대안 4개.
+- `src/rl/dqnUpdate.ts`: `DqnHyperparams`, `DEFAULT_DQN_HYPERPARAMS`, `DqnTrainer(model, params?)`(Adam 소유) +
+  `trainStep(batch): number`(빈 배치 예외, 텐서 전부 dispose, loss 반환) + `dispose()`(optimizer accumulator 해제).
+- `src/rl/dqnUpdate.test.ts`(6): 유한 loss(≥0), done-only 타깃 유한, **고정 배치 150스텝에서 loss 감소**(실제 학습),
+  빈 배치 예외, 기본 하이퍼파라미터 sane, **leak 0**(`tf.memory().numTensors` build/10스텝/dispose 전후 동일).
+- `src/rl/README.md`: M4.6 landed 반영.
+
+### M4 Exit Criteria 진전
+- "tensor leak 검사" 기준을 update step 단위에서 충족(누수 0). "학습이 실제로 개선"의 부분 근거(고정 배치 loss 감소).
+  main-thread non-blocking(worker)·eval seed 분리·model snapshot·Fixed 대비 개선·실패 기록은 후속(M4.7–M4.10).
+  milestone/게이트 변경 없음(M4 active).
+
+### 금지 지름길 준수
+- 학습 루프/에피소드 롤아웃/Web Worker/model save·load/엔진 `controllerKind='dqn'` 배선 **미구현**. 단일 배치 1스텝만.
+  build 번들 무증가(앱이 rl 미import). golden/`metricVersion` 불변.
+
+### Tests actually run
+- `npm run check` → PASS (35 files, **244 tests**; 이전 238 + 신규 6). session:check ✓, tokens ✓, build ✓.
+
+### Known issue / env note
+- `npm install`은 `--legacy-peer-deps` 필요(ERESOLVE). TF.js는 node cpu backend. 학습은 확률적(R8) — 재현성은 eval
+  seed 분리(M4.9)로.
+
+### Next exact actions (M4 계속)
+1. M4.7 training worker 프로토콜(`src/workers/`, ARCHITECTURE main↔worker): 메시지 스키마(start/step/stop, 진행/loss
+   보고), 순수 프로토콜 함수 + 메시지 통합 테스트. 학습 batch path를 worker로(렌더 non-block, R3). 모델/버퍼/트레이너를
+   worker 안에서 조립.
+2. M4.8 model save/load(`tf.io`; IndexedDB 또는 직렬화) — 저장→로드 후 동일 입력 예측 parity 테스트.
+3. M4.9 eval runner: `TrafficEngine`에 `controllerKind='dqn'` 배선(DqnController + greedy policy=argmax Q) +
+   provenance/runConfig 확장(D-010, controllerId 'dqn-v1'), train/eval seed 분리(TEST_STRATEGY). M4.10 Fixed 대비
+   반복-seed eval(실패도 기록, R2).
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.6 done; M4.7–M4.10 남음).
+
+---
+
 ## 2026-09-22 — M4.5 epsilon-greedy exploration schedule (pure, deterministic)
 
 ### Session objective

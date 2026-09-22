@@ -450,3 +450,37 @@ loss는 update step(M4.6) 소관이라 여기서 만들지 않는다. 이 슬라
 backend는 eval에서 기록한다(R5). 따라서 network 초기화는 seed 고정 대상이 아니며 재현성은 eval seed 분리(M4.9)로 확보.
 구조/`DQN_HIDDEN_UNITS`를 바꾸면 이 결정과 이후 모델 저장·로드 fixture(M4.8)를 함께 갱신한다. 의존: `rl → simulation`
 상수(`OBSERVATION_SIZE`/`ACTION_SIZE` 파생) + `@tensorflow/tfjs` — 금지된 `simulation → rl` 없음.
+
+## D-019 — DQN update step: target, loss, hyperparameters (M4.6)
+**Status:** accepted (M4)
+
+M4.6은 표준 DQN 1-스텝 gradient 업데이트를 구현한다(`src/rl/dqnUpdate.ts`, `DqnTrainer`). replay 미니배치
+(D-017 `Transition[]`)에 대해:
+
+> `y = reward + γ · maxₐ' Q_target(nextObs) · (1 − done)` (target net, **gradient 없음**)
+> `loss = Huber( y, Q_online(obs)[action] )`, `Adam(learningRate)`로 online 파라미터 1스텝
+
+- **Double/vanilla:** 기본 vanilla DQN(target net의 max). Double DQN은 후속 튜닝 여지로 남김.
+- **loss = Huber(δ=1)** — DQN 표준(이상치에 MSE보다 강건). 선택 action의 Q만 대상으로(one-hot 마스크 → `Σ(Q⊙mask)`),
+  나머지 action Q에는 gradient가 흐르지 않는다.
+- **하이퍼파라미터(named, `DEFAULT_DQN_HYPERPARAMS`)**: `γ = 0.95`, `learningRate = 1e-3`(Adam). reward는 D-017 raw
+  음의 큐를 **스케일링 없이** 사용(스케일/클리핑은 필요 시 후속). **batch size**와 **target sync 주기**는 이 스텝이 아니라
+  학습 루프(M4.7/M4.9)의 하이퍼파라미터다 — `trainStep(batch)`는 주어진 배치와 현재 target으로 한 스텝만 수행한다.
+- **텐서 규율:** target y는 `tf.tidy`로(중간 텐서 즉시 해제), 손실은 `optimizer.minimize(fn, true)`의 반환 scalar만 읽고
+  dispose, 입력/타깃 텐서는 스텝 끝에 dispose, Adam accumulator는 `DqnTrainer.dispose()`(=`optimizer.dispose()`)로 해제.
+  → `tf.memory().numTensors`가 생성·다수 스텝·dispose 전후 동일(M4 leak 기준).
+
+**Reason:** target net + Huber + Adam은 검증된 DQN 조합으로 소규모 문제에서 안정적이다. 선택 action만 loss에 넣는 것은
+DQN의 표준(관측된 action의 Q만 학습). 하이퍼파라미터를 named 상수로 두어 하드코딩을 피하고, 단일 업데이트 스텝을 학습
+루프와 분리해 순수하게(배치 in → loss out) 테스트한다.
+
+**Alternatives considered:**
+- (a) MSE loss — Huber보다 이상치에 민감(큰 TD-error에서 폭주 위험). Huber 채택(δ=1).
+- (b) Double DQN(online argmax + target 평가) — 과대추정 완화하나 지금은 복잡도↑. vanilla로 시작, 후속 여지.
+- (c) 업데이트 스텝이 target sync/epsilon/batch까지 소유 — 학습 루프(M4.7/M4.9) 책임과 뒤섞임. 스텝은 배치 1스텝만.
+- (d) reward 스케일링/정규화를 여기서 — 정의(D-017)와 분리. 필요 확인 후 후속(스케일도 결정 항목).
+
+**Determinism/metric impact:** 보고 metric·`metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(엔진 무배선).
+학습은 확률적(가중치 초기화·SGD, R8)이라 결정론 대상이 아니며, 재현성은 eval seed 분리(M4.9)로 확보한다. γ·lr·loss·
+reward 스케일을 바꾸면 이 결정과 학습/평가 결과를 함께 갱신한다. 의존: `rl → simulation`(RandomSource/상수) +
+`@tensorflow/tfjs` — 금지된 `simulation → rl` 없음.
