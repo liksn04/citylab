@@ -81,4 +81,23 @@ describe('M3.3 — runExperiment (seed-set runner)', () => {
       expect(r.summary).toEqual(plain.summary)
     }
   })
+
+  it('constrains its public contract to baseline kinds — dqn cannot run without an injected model (D-021)', () => {
+    // Positive: baseline kinds (fixed / maxpressure) run from an EngineConfig alone.
+    expect(runExperiment(BALANCED_4X4_V1, [41021], ['fixed', 'maxpressure']).controllers).toEqual([
+      'fixed',
+      'maxpressure',
+    ])
+
+    // Negative (compile-time only, enforced by `tsc -b`; the closure is never
+    // invoked so it never throws at runtime): the runner must not type-check
+    // 'dqn'. 'dqn' needs an injected DqnController wrapping a trained network
+    // (D-021), which `runScenario`/`runExperiment` cannot build. If the `kinds`
+    // param were widened back to ControllerKind, this @ts-expect-error would go
+    // unused and the build would fail — that is the regression guard.
+    const rejectsDqnAtCompileTime = () =>
+      // @ts-expect-error 'dqn' is not a BaselineControllerKind — runExperiment has no injected model to run it
+      runExperiment(BALANCED_4X4_V1, [41021], ['dqn'])
+    expect(rejectsDqnAtCompileTime).toBeTypeOf('function')
+  })
 })

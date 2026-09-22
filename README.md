@@ -2,7 +2,7 @@
 
 브라우저에서 교통 시뮬레이션, 강화학습, 비교 실험, 데이터 분석을 한 흐름으로 다루는 실험형 프로젝트입니다.
 
-이 스타터는 **Milestone 0 완료 상태**입니다. 실행 가능한 앱 셸, 4×4 도시 캔버스, 결정적(seed 기반) 고정 신호 시뮬레이션, 상태 저장 구조, 디자인 토큰, 테스트 구조, AI 에이전트 운영 규칙이 포함되어 있습니다.
+이 저장소는 현재 **M5 — Analytics & Neural Inspection**을 진행 중입니다. M0–M4가 완료되어 있습니다: 실행 가능한 앱 셸과 디자인 토큰, 결정적(seed 기반) 경량 mesoscopic traffic core, Fixed / MaxPressure 컨트롤러, experiment runner·provenance·persistence·CSV/JSON export, 그리고 shared DQN core(TensorFlow.js Q-network·replay·target·epsilon-greedy·학습/평가 유틸리티·model 직렬화)까지 구현·검증되어 있습니다. Analytics UI는 지금 활성 마일스톤이며 아직 구현 전입니다.
 
 ## 시작
 
@@ -36,10 +36,10 @@ AI 에이전트든 사람이든 작업 시작 전에 아래 순서로 읽습니�
 
 ## 현재 상태
 
-- 현재 활성 마일스톤: **M4 — Shared DQN Training**
-- M0–M3는 완료됨(deterministic core, MaxPressure baseline, experiment runner/provenance/persistence/export).
-- DQN, TensorFlow.js 학습, Web Worker 학습 루프는 M4에서 구현한다. 단 M4 아키텍처 lock을 따른다(shared network + per-intersection observation, action `HOLD|SWITCH`, safety는 환경이 강제).
-- Analytics dashboard는 **M5 이전 확장 금지**이며, 모든 시각화는 실제 수집 데이터만 사용.
+- 현재 활성 마일스톤: **M5 — Analytics & Neural Inspection**
+- M0–M4는 완료됨: deterministic traffic core, Fixed / MaxPressure baseline, experiment runner / provenance / persistence / export, shared DQN core 학습·평가(observation·action·reward 계약, online+target Q-network, replay buffer, epsilon-greedy, DQN update step, training worker protocol, model 직렬화/로드).
+- Shared DQN은 M4 아키텍처 lock을 따른다: shared network + per-intersection observation, action `HOLD|SWITCH`, safety는 환경이 강제(min-green/yellow). `trainDqn()`/`evaluateDqn()`은 현재 headless 학습·평가 유틸리티이며 live React 학습 UI에는 아직 배선되지 않았다.
+- Analytics UI(컨트롤러 비교·시계열·congestion heatmap·neural inspection)는 지금 활성 마일스톤(M5)이며, 모든 시각화는 실제 수집 run 데이터만 사용한다(하드코딩 금지).
 
 `npm run session:open`은 현재 마일스톤과 허용 작업을 출력합니다.
 
@@ -60,8 +60,8 @@ src/
   simulation/      도시/차량/라우팅/시간 진행
   controllers/     Fixed, Pressure, DQN 제어기
   analytics/       측정과 집계
-  rl/              M4에서 활성화
-  workers/         M4에서 활성화
+  rl/              shared DQN core (observation·action·reward, Q-network, replay, 학습/평가)
+  workers/         training worker protocol (M4.7)
   persistence/     IndexedDB / Dexie
   styles/          디자인 토큰과 전역 스타일
 

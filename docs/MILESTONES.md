@@ -132,7 +132,7 @@ AI가 전혀 없어도 신뢰할 수 있고 재현 가능한 traffic simulator�
 
 ---
 
-## M4 — Shared DQN Training — ACTIVE
+## M4 — Shared DQN Training — DONE
 
 ### Goal
 실제로 학습하는 shared policy를 붙인다.
@@ -153,17 +153,17 @@ AI가 전혀 없어도 신뢰할 수 있고 재현 가능한 traffic simulator�
 - safety phase transition은 환경이 강제하고 agent가 직접 yellow를 선택하지 않는다.
 
 ### Exit Criteria
-- [ ] 학습 루프가 main UI thread를 장시간 block하지 않음
-- [ ] tensor leak 검사
-- [ ] seed가 evaluation에서 고정됨
-- [ ] training seed와 evaluation seed 분리
-- [ ] model snapshot 저장/로드
-- [ ] 최소 한 제공 scenario에서 Fixed baseline 대비 반복 evaluation 개선 확인
-- [ ] 실패 scenario도 숨기지 않고 기록
+- [x] 학습 루프가 main UI thread를 장시간 block하지 않음 — worker training boundary(`src/workers/trainingProtocol.ts` 순수 `TrainingSession` + `trainingWorker.ts` glue), 청크 학습 + progress/loss 보고, leak 0. `trainDqn()`/`evaluateDqn()`은 headless 유틸리티이며 아직 React UI/worker에 배선되지 않음(경계 수준 충족).
+- [x] tensor leak 검사 — `qNetwork`/`dqnUpdate`/`modelStorage`/`trainingProtocol`/`dqnTraining` 테스트에서 `tf.memory().numTensors` 전후 동일.
+- [x] seed가 evaluation에서 고정됨 — `evaluateDqn(model, scenario)` greedy(ε=0) 결정론(`toEqual` 테스트).
+- [x] training seed와 evaluation seed 분리 — `trainDqn(trainSeeds)` vs `evaluateDqnVsFixed(evalSeeds)`, `dqnBaseline.test`가 disjoint를 강제. 측정 run: train 41021.. / eval 51001...
+- [x] model snapshot 저장/로드 — `src/rl/modelStorage.ts`(tf.io `ModelArtifacts` 직렬화/로드), bit-identical prediction parity 테스트. IndexedDB/UI model-library workflow는 아직 아님.
+- [x] 최소 한 제공 scenario에서 Fixed baseline 대비 반복 evaluation 개선 확인 — `balanced-4x4-v1` 4개 disjoint eval seed에서 모든 지표 개선(측정: avg 2.64 vs 12.20, p95 9.5 vs 37.5, throughput 591 vs 588, maxQueue 2.25 vs 4.25, switches 341 vs 1248). 초기화 확률적(R8)이라 committed 테스트는 승패 비단언.
+- [x] 실패 scenario도 숨기지 않고 기록 — 직전 gamma 0.95 MIXED 결과(throughput −32%, 과다 스위칭)를 `PROGRESS.md`에 R2 failure evidence로 보존.
 
 ---
 
-## M5 — Analytics & Neural Inspection — LOCKED
+## M5 — Analytics & Neural Inspection — ACTIVE
 
 ### Goal
 결과를 “보기 좋게”가 아니라 정확하게 읽을 수 있게 한다.
