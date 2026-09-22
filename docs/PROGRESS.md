@@ -1,5 +1,45 @@
 # Progress Log
 
+## 2026-09-22 — M4.5 epsilon-greedy exploration schedule (pure, deterministic)
+
+### Session objective
+M4.5: 순수·결정론적 epsilon-greedy 탐험 = (1) step→epsilon 스케줄, (2) Q-row + seeded RNG → action 선택. 학습 루프 없음.
+
+### Pre-code contract check (Phase C)
+- epsilon 스케줄/탐험은 **학습 하이퍼파라미터**이지 reward/experiment metric/architecture가 아니므로 Phase C ADR 트리거
+  해당 없음. named 상수로 두고(하드코딩 회피) 코딩. metric/`summary()`/golden 불변.
+
+### Completed
+- `src/rl/epsilon.ts`: `EpsilonSchedule{start,end,decaySteps}` + `DEFAULT_EPSILON_SCHEDULE{1, 0.05, 10000}`;
+  `epsilonAt(step, schedule?)`(선형 anneal — step≤0=start, ≥decaySteps=end, 단조 비증가; decaySteps≤0=start);
+  `greedyAction(qRow)`(argmax, 최저 index tie-break, empty 예외); `epsilonGreedyAction(qRow, epsilon, rng)`(먼저
+  `rng.next()<epsilon`로 탐험 여부 → 탐험 시 `rng.int(0,ACTION_SIZE)`, 아니면 greedy; seeded RNG로 결정론).
+- `src/rl/epsilon.test.ts`(12): 스케줄 경계(0/음수/mid/decaySteps/초과/decaySteps≤0), 기본 스케줄 sane, greedy argmax·
+  tie·empty, epsilon 0=항상 exploit, 1=항상 explore·범위 내, seed 결정성.
+- `src/rl/README.md`: M4.5 landed 반영.
+
+### 금지 지름길 준수 / M4 진전
+- 학습 update/optimizer/loss/worker/save·load/엔진 배선 없음. 스케줄+선택 함수만(순수). exploration은 M4 학습 토대.
+  milestone/게이트 변경 없음(M4 active).
+
+### Tests actually run
+- `npm run check` → PASS (34 files, **238 tests**; 이전 226 + 신규 12). session:check ✓, tokens ✓, build ✓.
+
+### Known issue / env note
+- `npm install`은 여전히 `--legacy-peer-deps` 필요(ERESOLVE). 코드/package.json 무변경.
+
+### Next exact actions (M4 계속)
+1. M4.6 DQN update step(`src/rl/`, TensorFlow.js): replay 미니배치 → y = r + γ·maxQ_target(next)·(1−done),
+   online Q(선택 action)에 Huber/MSE loss, Adam(lr) 1스텝. **loss 유한 + 텐서 dispose(leak 0)** 테스트. γ·lr·reward
+   스케일·batch·target sync 주기 = 학습 하이퍼파라미터 → 코딩 전 `docs/DECISIONS.md` **D-019** 기록.
+2. M4.7 worker 프로토콜 → M4.8 save/load(예측 parity) → M4.9 eval runner(엔진 `controllerKind='dqn'` 배선 +
+   provenance/runConfig 확장 D-010, train/eval seed 분리) → M4.10 Fixed 대비 반복-seed eval(실패도 기록, R2).
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.5 done; M4.6–M4.10 남음).
+
+---
+
 ## 2026-09-22 — M4.4 online + target Q-network (TensorFlow.js; no update step)
 
 ### Session objective

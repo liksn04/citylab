@@ -17,8 +17,9 @@ Landed:
   seeded, deterministic ring replay buffer. Pure; no tensors/training.
 - `qNetwork.ts` — M4.4 shared online + target Q-network (TensorFlow.js, D-018).
   Shape + target sync + tensor-leak-free (tf.tidy/dispose). No update step yet.
+- `epsilon.ts` — M4.5 epsilon-greedy exploration: linear `epsilonAt(step)`
+  schedule + `greedyAction`/`epsilonGreedyAction` (seeded, deterministic). Pure.
 
-Still gated to later M4 slices (do not pull forward): epsilon schedule, DQN
-update step, Web Worker training protocol, model save/load, and evaluation with
-train/eval seed separation. Keep min-green and yellow environment-owned via
-`signalMachine`.
+Still gated to later M4 slices (do not pull forward): DQN update step, Web Worker
+training protocol, model save/load, and evaluation with train/eval seed
+separation. Keep min-green and yellow environment-owned via `signalMachine`.
