@@ -1,5 +1,58 @@
 # Progress Log
 
+## 2026-09-22 — M4.4 online + target Q-network (TensorFlow.js; no update step)
+
+### Session objective
+M4.4: TensorFlow.js로 shared Q-network(online + target clone)를 만들고 shape·target sync·**tensor leak 없음**을
+검증한다. optimizer/loss/update와 엔진 배선은 없음(M4.6+).
+
+### Pre-code contract check (Phase C)
+- network 구조/하이퍼파라미터 = 아키텍처 결정 → 코딩 전 `docs/DECISIONS.md` **D-018** 기록. 엔진 무배선이라
+  metric/`summary()`/golden 불변. TF.js가 node(vitest, env=node)에서 cpu backend로 동작함을 사전 스모크로 확인.
+
+### Completed
+- `docs/DECISIONS.md` **D-018**: shared MLP `OBSERVATION_SIZE(4)→Dense(32,relu)→Dense(ACTION_SIZE(2),linear)`,
+  target=online 주기적 복제(`syncTarget`), 모든 forward `tf.tidy`+`arraySync`, `dispose`로 online+target 해제 →
+  `numTensors` 불변(M4 leak 기준 토대). hidden=32(튜닝 가능); optimizer/lr/γ/loss는 M4.6로 분리. R8(초기화 확률적·
+  backend 의존)·R5(backend 기록은 eval) 명시. 대안 4개 기록.
+- `src/rl/qNetwork.ts`: `DQN_HIDDEN_UNITS=32`, `buildQNetwork(hidden?)`, `DqnModel`(online/target 소유, `syncTarget`,
+  `predictQ`/`predictTargetQ`(빈 배치 → [], 그 외 tidy+tensor2d[N,OBSERVATION_SIZE]+arraySync), `dispose`).
+  getWeights는 online의 live 가중치라 setWeights가 값만 복사(누수 없음).
+- `src/rl/qNetwork.test.ts`(7): 가중치 shape([obs,hidden],[hidden],[hidden,act],[act]), 기본 hidden, predict shape/
+  유한성, 빈 배치, 생성 시 target==online, `syncTarget`가 stale target 갱신(online perturb 후 일치), **leak 없음**
+  (`tf.memory().numTensors` build/predict/sync/dispose 전후 동일).
+- `src/rl/README.md`: M4.4 landed 반영.
+
+### M4 Exit Criteria 진전
+- "tensor leak 검사" 기준의 **토대** 마련(qNetwork 단위에서 leak 0 증명). 나머지 exit(학습 non-blocking, eval seed
+  고정/분리, model snapshot, Fixed 대비 개선, 실패 기록)는 후속. milestone 상태/게이트 변경 없음(M4 active).
+
+### 금지 지름길 준수
+- optimizer/loss/DQN update/epsilon/replay 학습 루프/Web Worker/model save·load/엔진 배선 **미구현**. network 구조 +
+  target sync + predict + dispose만. build 번들 무증가(앱이 qNetwork 미import → tree-shaken). golden/metricVersion 불변.
+
+### Tests actually run
+- `npm run check` → PASS (33 files, **226 tests**; 이전 219 + 신규 7). session:check active M4 ✓, tokens ✓, build ✓
+  (tsc가 tfjs 타입 포함 통과, vite 번들 239.57 kB 그대로).
+
+### Known issue / env note
+- `npm install`은 여전히 `--legacy-peer-deps` 필요(ERESOLVE). TF.js는 node에서 `@tensorflow/tfjs-node` 없이 cpu
+  backend로 동작(정보성 "Hi there" 경고만; 테스트엔 무해). 실제 backend(cpu/webgl) 기록은 eval(M4.9, R5).
+
+### Next exact actions (M4 계속)
+1. M4.5 epsilon-greedy 스케줄(`src/rl/`, 순수·결정론): start/end/decay(지수 또는 선형) → `epsilonAt(step)`; 경계
+   (step 0 = start, 큰 step → end로 수렴, 단조 감소) 테스트. 학습/탐험 실행은 아직 없음(스케줄 함수만).
+2. M4.6 DQN update step: replay 미니배치 → target y = r + γ·maxQ_target(next)·(1−done), online Q(선택 action) 대상
+   Huber/MSE loss, optimizer(Adam, lr) 1스텝. loss 유한 + 텐서 dispose(leak 0) 테스트. γ·lr·reward 스케일은 여기서 결정
+   (DECISIONS 기록).
+3. M4.7 worker 프로토콜 → M4.8 save/load(예측 parity) → M4.9 eval runner(엔진 `controllerKind='dqn'` 배선 +
+   provenance/runConfig 확장 D-010, train/eval seed 분리) → M4.10 Fixed 대비 반복-seed eval(실패도 기록, R2).
+
+### Active milestone
+M4 — Shared DQN Training (M4.1–M4.4 done; M4.5–M4.10 남음).
+
+---
+
 ## 2026-09-22 — M4.3 replay buffer + reward definition (no training)
 
 ### Session objective

@@ -15,8 +15,10 @@ Landed:
   environment-owned.
 - `reward.ts` + `replayBuffer.ts` — M4.3 per-intersection reward (D-017) and a
   seeded, deterministic ring replay buffer. Pure; no tensors/training.
+- `qNetwork.ts` — M4.4 shared online + target Q-network (TensorFlow.js, D-018).
+  Shape + target sync + tensor-leak-free (tf.tidy/dispose). No update step yet.
 
-Still gated to later M4 slices (do not pull forward): online + target network,
-epsilon schedule, DQN update step, Web Worker training protocol, model save/load,
-and evaluation with train/eval seed separation. Keep min-green and yellow
-environment-owned via `signalMachine`.
+Still gated to later M4 slices (do not pull forward): epsilon schedule, DQN
+update step, Web Worker training protocol, model save/load, and evaluation with
+train/eval seed separation. Keep min-green and yellow environment-owned via
+`signalMachine`.

@@ -415,3 +415,38 @@ per-intersection observation(D-015)과 대칭이다. 순수·결정론적이라 
 바꾸면 학습 의미가 바뀌므로 이 결정과 이후 학습/평가 결과를 함께 갱신한다. reward **스케일링/클리핑**은 학습
 하이퍼파라미터(M4.6) 소관이며 정의(raw 음의 큐)와 분리한다. 의존: `rl → simulation`(queue map/approach index 재사용),
 금지된 `simulation → rl` 없음.
+
+## D-018 — Shared-DQN Q-network: online + target, tensor discipline (M4.4)
+**Status:** accepted (M4)
+
+M4.4는 TensorFlow.js로 **shared** Q-network를 만든다(D-002). 구조는 소규모 MLP:
+
+> 입력 `OBSERVATION_SIZE`(4, D-015) → Dense(`DQN_HIDDEN_UNITS`=32, relu) → Dense(`ACTION_SIZE`(2, D-016), linear)
+
+하나의 network를 모든 교차로가 공유하며(관측을 배치 행으로 넣음), 출력은 각 action의 Q값이다. **target network**는
+online의 주기적 복제로, `syncTarget()`가 online 가중치를 target에 복사한다(DQN target 안정화 — bootstrapping 진동
+완화). 구현은 `src/rl/qNetwork.ts`: `buildQNetwork(hidden?)`, `DqnModel`(online+target 소유, `syncTarget`,
+`predictQ`/`predictTargetQ`, `dispose`).
+
+**텐서 수명 관리(핵심).** 모든 forward는 `tf.tidy`로 감싸 중간 텐서를 즉시 해제하고, `predict*`는 `arraySync`로 JS
+배열만 반환한다(텐서 밖으로 새지 않음). `dispose()`가 online+target 가중치를 모두 해제한다 → `tf.memory().numTensors`가
+생성·예측·sync·dispose 전후로 동일(테스트로 강제). 이것이 M4 exit "tensor leak 검사"의 토대다.
+
+**하이퍼파라미터.** `DQN_HIDDEN_UNITS = 32`(4→2 소규모 문제의 합리적 시작값, 튜닝 가능). optimizer/learning rate/γ/
+loss는 update step(M4.6) 소관이라 여기서 만들지 않는다. 이 슬라이스는 구조 + target sync + predict + dispose만 하고,
+엔진/worker 배선(M4.6/M4.7/M4.9)은 하지 않는다.
+
+**Reason:** online/target 분리는 표준 DQN 안정화 기법이고, 단일 shared network는 D-002다. `tidy`/`dispose`로 텐서
+수명을 처음부터 명시 관리하면 이후 학습 루프가 leak 없이 확장된다. 하이퍼파라미터를 named 상수로 두어 하드코딩을 피한다.
+
+**Alternatives considered:**
+- (a) 교차로마다 network — D-002 위반(파라미터 폭증·일반화 저하). shared 채택.
+- (b) target network 없이 online만 부트스트랩 — target 진동/발산 위험. target 채택.
+- (c) 더 깊고 넓은 net — 4→2 문제에 과다(학습 느림·leak 표면적↑). 1-hidden(32)으로 시작, 필요 시 튜닝.
+- (d) 지금 optimizer/loss까지 — M4.6 소관이라 분리(shape·leak만 이 슬라이스).
+
+**Determinism/metric impact:** 보고 metric·`metricVersion`·`summary()`·golden/m2 fixture **변경 없음**(엔진 무배선).
+**network 가중치 초기화는 확률적·backend 의존(cpu/webgl)** — 결정론 시뮬레이션과 확률적 학습을 분리 표기하고(R8),
+backend는 eval에서 기록한다(R5). 따라서 network 초기화는 seed 고정 대상이 아니며 재현성은 eval seed 분리(M4.9)로 확보.
+구조/`DQN_HIDDEN_UNITS`를 바꾸면 이 결정과 이후 모델 저장·로드 fixture(M4.8)를 함께 갱신한다. 의존: `rl → simulation`
+상수(`OBSERVATION_SIZE`/`ACTION_SIZE` 파생) + `@tensorflow/tfjs` — 금지된 `simulation → rl` 없음.
